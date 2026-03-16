@@ -1,0 +1,272 @@
+{% extends "schedule/base.html" %}
+{% load schedule_tags %}
+{% block title %}Исходные данные{% endblock %}
+{% block nav_data %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="container-fluid px-0">
+    <h1><i class="bi bi-database me-2"></i>Исходные данные</h1>
+    <p>Группы, преподаватели и дисциплины, загруженные из Excel-файлов</p>
+  </div>
+</div>
+
+<!-- Summary stats -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_groups }}</div>
+      <div class="stat-label">Учебных групп</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_teachers }}</div>
+      <div class="stat-label">Преподавателей</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_disciplines }}</div>
+      <div class="stat-label">Дисциплин</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="dataTabs" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" id="groups-tab" data-bs-toggle="tab"
+            data-bs-target="#groups-panel" type="button">
+      <i class="bi bi-people me-1"></i>Группы
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="load-tab" data-bs-toggle="tab"
+            data-bs-target="#load-panel" type="button">
+      <i class="bi bi-journal-text me-1"></i>Нагрузка по группам
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="teachers-tab" data-bs-toggle="tab"
+            data-bs-target="#teachers-panel" type="button">
+      <i class="bi bi-person-badge me-1"></i>Преподаватели
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" id="disc-tab" data-bs-toggle="tab"
+            data-bs-target="#disc-panel" type="button">
+      <i class="bi bi-book me-1"></i>Дисциплины
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- Groups summary tab -->
+  <div class="tab-pane fade show active" id="groups-panel">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span><i class="bi bi-people me-2"></i>Список учебных групп</span>
+        <small class="text-muted fw-normal">
+          Деление на подгруппы при лаб. занятиях: численность ≥ {{ split_threshold }} чел.
+        </small>
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="table table-sm table-hover mb-0" style="font-size:.85rem;">
+          <thead style="background:var(--primary-light);">
+            <tr>
+              <th class="ps-3" style="color:var(--primary-dark);">Группа</th>
+              <th class="text-center" style="color:var(--primary-dark);">
+                <i class="bi bi-people me-1"></i>Численность
+              </th>
+              <th class="text-center" style="color:var(--primary-dark);">Деление на подгруппы</th>
+              <th class="text-center" style="color:var(--primary-dark);">Дисциплин / занятий</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for g in group_summary %}
+            <tr>
+              <td class="ps-3">
+                <span class="fw-bold" style="color:var(--primary-dark);">{{ g.code }}</span>
+              </td>
+              <td class="text-center">
+                {% if g.size %}
+                <span class="badge px-2 py-1
+                  {% if g.splits_labs %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %}">
+                  {{ g.size }} чел.
+                </span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if g.splits_labs %}
+                <span class="badge" style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;">
+                  <i class="bi bi-scissors me-1"></i>2 подгруппы
+                </span>
+                {% else %}
+                <span class="text-muted small">единая группа</span>
+                {% endif %}
+              </td>
+              <td class="text-center text-muted small">{{ g.lesson_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Groups load tab -->
+  <div class="tab-pane fade" id="load-panel">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-journal-text me-2"></i>Учебная нагрузка по группам
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+          <thead style="background:var(--primary-light);">
+            <tr>
+              <th class="ps-3" style="color:var(--primary-dark);">Группа</th>
+              <th style="color:var(--primary-dark);">Дисциплина</th>
+              <th style="color:var(--primary-dark);">Полное название</th>
+              <th class="text-center" style="color:var(--primary-dark);">Лек</th>
+              <th class="text-center" style="color:var(--primary-dark);">Пр</th>
+              <th class="text-center" style="color:var(--primary-dark);">Лаб</th>
+              <th style="color:var(--primary-dark);">Преподаватель</th>
+              <th style="color:var(--primary-dark);">Тип</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for group_code, lessons in groups.items %}
+            {% for lesson in lessons %}
+            <tr>
+              {% if forloop.first %}
+              <td class="ps-3 fw-bold" style="color:var(--primary-dark);vertical-align:top;"
+                  rowspan="{{ lessons|length }}">
+                {{ group_code }}
+                {% with size=group_sizes|get_item:group_code %}
+                {% if size %}
+                <div class="mt-1">
+                  <span class="badge bg-light text-muted border" style="font-size:.65rem;">
+                    {{ size }} чел.
+                  </span>
+                </div>
+                {% endif %}
+                {% endwith %}
+              </td>
+              {% endif %}
+              <td>
+                <code class="text-dark"
+                      style="background:var(--primary-light);padding:.1rem .3rem;border-radius:4px;">
+                  {{ lesson.discipline_short }}
+                </code>
+              </td>
+              <td>{{ lesson.discipline_full|default:lesson.discipline_short }}</td>
+              <td class="text-center">
+                {% if lesson.lesson_type == 'lec' %}
+                <span class="badge" style="background:var(--primary-light);color:var(--primary-dark)">{{ lesson.count }}</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if lesson.lesson_type == 'prac' %}
+                <span class="badge" style="background:#dcfce7;color:#15803d">{{ lesson.count }}</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if lesson.lesson_type == 'lab' %}
+                <span class="badge" style="background:#fef3c7;color:#b45309">{{ lesson.count }}</span>
+                {% endif %}
+              </td>
+              <td style="white-space:nowrap;font-size:.75rem;">{{ lesson.teacher }}</td>
+              <td>
+                {% if lesson.lesson_type == 'lec' %}
+                  <span class="lesson-type-badge badge-lec">Лекция</span>
+                {% elif lesson.lesson_type == 'prac' %}
+                  <span class="lesson-type-badge badge-prac">Практика</span>
+                {% else %}
+                  <span class="lesson-type-badge badge-lab">
+                    Лаб{% if lesson.subgroup %}&nbsp;П{{ lesson.subgroup }}{% endif %}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teachers tab -->
+  <div class="tab-pane fade" id="teachers-panel">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-person-badge me-2"></i>Преподаватели
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+          <thead style="background:var(--primary-light);">
+            <tr>
+              <th class="ps-3" style="color:var(--primary-dark);">Преподаватель</th>
+              <th style="color:var(--primary-dark);">Дисциплины</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for teacher, discs in teachers.items %}
+            <tr>
+              <td class="ps-3 fw-semibold" style="white-space:nowrap;">
+                <i class="bi bi-person me-1 text-primary"></i>{{ teacher }}
+              </td>
+              <td>
+                {% for d in discs %}
+                <span class="badge me-1 mb-1"
+                      style="background:var(--primary-light);color:var(--primary-dark);font-weight:400;">
+                  {{ d }}
+                </span>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disciplines tab -->
+  <div class="tab-pane fade" id="disc-panel">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-book me-2"></i>Справочник дисциплин
+      </div>
+      <div class="table-scroll-wrapper">
+        <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+          <thead style="background:var(--primary-light);">
+            <tr>
+              <th class="ps-3" style="color:var(--primary-dark);">Краткое название</th>
+              <th style="color:var(--primary-dark);">Полное название</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for short, full in disciplines.items %}
+            <tr>
+              <td class="ps-3">
+                <code class="text-dark"
+                      style="background:var(--primary-light);padding:.1rem .4rem;border-radius:4px;">
+                  {{ short }}
+                </code>
+              </td>
+              <td>{{ full }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

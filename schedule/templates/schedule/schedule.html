@@ -1,0 +1,188 @@
+{% extends "schedule/base.html" %}
+{% block title %}Расписание{% endblock %}
+{% block nav_schedule %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="container-fluid px-0">
+    <h1><i class="bi bi-table me-2"></i>Расписание занятий</h1>
+    <p>Сгенерировано: {{ result.generated_at|slice:":19" }}
+       &nbsp;|&nbsp; Нарушений: {{ result.hard_violations }}
+       &nbsp;|&nbsp; Качество: {{ result.quality_score }}%</p>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-sm-auto">
+      <div class="small fw-semibold mb-1">Просмотр</div>
+      <div class="btn-group">
+        <a href="?view=group&entity={{ selected_entity }}"
+           class="btn btn-sm {% if view_type == 'group' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          <i class="bi bi-people me-1"></i>По группам
+        </a>
+        <a href="?view=teacher&entity={{ selected_entity }}"
+           class="btn btn-sm {% if view_type == 'teacher' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          <i class="bi bi-person-badge me-1"></i>По преподавателям
+        </a>
+      </div>
+    </div>
+    <div class="col-12 col-sm col-md-4 col-lg-3">
+      <div class="small fw-semibold mb-1">{{ entity_label }}</div>
+      <select class="form-select form-select-sm"
+              onchange="location.href='?view={{ view_type }}&entity='+encodeURIComponent(this.value)">
+        {% for entity in entities %}
+        <option value="{{ entity }}" {% if entity == selected_entity %}selected{% endif %}>{{ entity }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <!-- Legend -->
+    <div class="col-12 col-sm-auto ms-sm-auto">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="badge py-1 px-2" style="background:var(--primary-light);color:var(--primary-dark);border:1px solid var(--border)">
+          <span class="week-dot" style="background:var(--primary)"></span>Лекция
+        </span>
+        <span class="badge py-1 px-2" style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0">
+          <span class="week-dot" style="background:#22c55e"></span>Практика
+        </span>
+        <span class="badge py-1 px-2" style="background:#fef3c7;color:#b45309;border:1px solid #fde68a">
+          <span class="week-dot" style="background:#f59e0b"></span>Лаб. работа
+        </span>
+        <span class="badge py-1 px-2" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1">
+          <span style="font-size:.6rem;font-weight:700;margin-right:3px">В</span>верхняя
+          &nbsp;<span style="font-size:.6rem;font-weight:700;margin-right:3px">Н</span>нижняя
+        </span>
+        <span class="badge py-1 px-2" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>Нарушение
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule table: верхняя и нижняя в одной таблице -->
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-calendar-week me-2"></i>
+    <strong>{{ selected_entity }}</strong>
+    &nbsp;—&nbsp; верхняя и нижняя неделя
+  </div>
+  <div class="table-scroll-wrapper">
+    <table class="schedule-table">
+      <thead>
+        <tr>
+          <th class="slot-col">Пара</th>
+          {% for day_name in day_names %}
+          <th>{{ day_name }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in grid_rows %}
+        <tr>
+          <!-- Slot label -->
+          <td class="slot-col" style="background:var(--primary-light);text-align:center;vertical-align:middle;white-space:nowrap;">
+            <div style="font-weight:700;color:var(--primary-dark);font-size:.9rem;">{{ row.slot }}</div>
+            <div style="font-size:.68rem;color:var(--text-muted);">{{ row.slot_time }}</div>
+          </td>
+
+          {% for cell in row.cells %}
+          <td class="schedule-cell">
+            <div class="schedule-cell-inner">
+            {% if cell.merged %}
+              {# Одинаково в обе недели — карточка занимает обе строки сетки #}
+              {% if cell.w1 %}
+              {% with viol=cell.v1 %}
+              <div class="lesson-cell type-{{ cell.w1.lesson_type }} merged-cell merged-cell-wrap{% if viol %} has-violation{% endif %}">
+                <div class="lesson-disc">{{ cell.w1.discipline_short }}</div>
+                <div class="lesson-meta">
+                  {% if view_type == 'group' %}
+                    <i class="bi bi-person-fill me-1"></i>{{ cell.w1.teacher }}
+                  {% else %}
+                    <i class="bi bi-people-fill me-1"></i>{{ cell.w1.group }}
+                  {% endif %}
+                  {% if cell.w1.subgroup %}<span class="subgroup-badge">П{{ cell.w1.subgroup }}</span>{% endif %}
+                </div>
+                <div class="mt-1 d-flex align-items-center gap-1">
+                  <span class="lesson-type-badge badge-{{ cell.w1.lesson_type }}">{{ cell.w1.lesson_type_label }}</span>
+                  <span class="week-both-badge">В/Н</span>
+                </div>
+                {% if viol %}
+                <div class="violation-list">
+                  {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endwith %}
+              {% endif %}
+            {% else %}
+              {# В — row 1 (верхняя неделя), Н — row 2 (нижняя неделя) #}
+
+              {# Верхняя строка: В если есть, иначе пусто #}
+              <div class="slot-upper">
+                {% if cell.w1 %}
+                {% with viol=cell.v1 %}
+                <div class="lesson-cell type-{{ cell.w1.lesson_type }} week-upper{% if viol %} has-violation{% endif %}">
+                  <span class="week-label-badge week-upper-badge">В</span>
+                  <div class="lesson-disc">{{ cell.w1.discipline_short }}</div>
+                  <div class="lesson-meta">
+                    {% if view_type == 'group' %}
+                      <i class="bi bi-person-fill me-1"></i>{{ cell.w1.teacher }}
+                    {% else %}
+                      <i class="bi bi-people-fill me-1"></i>{{ cell.w1.group }}
+                    {% endif %}
+                    {% if cell.w1.subgroup %}<span class="subgroup-badge">П{{ cell.w1.subgroup }}</span>{% endif %}
+                  </div>
+                  <div class="mt-1">
+                    <span class="lesson-type-badge badge-{{ cell.w1.lesson_type }}">{{ cell.w1.lesson_type_label }}</span>
+                  </div>
+                  {% if viol %}
+                  <div class="violation-list">
+                    {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                {% endwith %}
+                {% endif %}
+              </div>
+
+              {# Нижняя строка: Н если есть, иначе пусто #}
+              <div class="slot-lower">
+                {% if cell.w2 %}
+                {% with viol=cell.v2 %}
+                <div class="lesson-cell type-{{ cell.w2.lesson_type }} week-lower{% if viol %} has-violation{% endif %}">
+                  <span class="week-label-badge week-lower-badge">Н</span>
+                  <div class="lesson-disc">{{ cell.w2.discipline_short }}</div>
+                  <div class="lesson-meta">
+                    {% if view_type == 'group' %}
+                      <i class="bi bi-person-fill me-1"></i>{{ cell.w2.teacher }}
+                    {% else %}
+                      <i class="bi bi-people-fill me-1"></i>{{ cell.w2.group }}
+                    {% endif %}
+                    {% if cell.w2.subgroup %}<span class="subgroup-badge">П{{ cell.w2.subgroup }}</span>{% endif %}
+                  </div>
+                  <div class="mt-1">
+                    <span class="lesson-type-badge badge-{{ cell.w2.lesson_type }}">{{ cell.w2.lesson_type_label }}</span>
+                  </div>
+                  {% if viol %}
+                  <div class="violation-list">
+                    {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                {% endwith %}
+                {% endif %}
+              </div>
+
+            {% endif %}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

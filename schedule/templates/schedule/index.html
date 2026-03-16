@@ -1,0 +1,205 @@
+{% extends "schedule/base.html" %}
+{% block title %}Генератор расписания — Главная{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="container-fluid px-0">
+    <h1><i class="bi bi-cpu me-2"></i>Генератор расписания</h1>
+    <p>Автоматическое составление расписания методом генетического алгоритма</p>
+  </div>
+</div>
+
+{% if files_missing %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+  <div>
+    Файлы данных не найдены.
+    <a href="{% url 'upload_files' %}" class="alert-link">Загрузите xlsx-файлы</a>
+    перед генерацией расписания.
+  </div>
+</div>
+{% endif %}
+
+{% if messages %}
+<div class="mb-3">
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2 px-3" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+
+  <!-- Generation form -->
+  <div class="col-12 col-lg-5 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-sliders me-2"></i>Параметры генерации
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'generate' %}" id="generateForm">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="population_size">
+              Размер популяции
+            </label>
+            <input type="number" id="population_size" name="population_size"
+                   class="form-control" value="{{ default_population }}"
+                   min="5" max="100" />
+            <div class="form-text">Рекомендуется 20–50</div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold" for="generations">
+              Количество поколений
+            </label>
+            <input type="number" id="generations" name="generations"
+                   class="form-control" value="{{ default_generations }}"
+                   min="10" max="500" />
+            <div class="form-text">Рекомендуется 100–200</div>
+          </div>
+
+          <div class="alert alert-primary py-2 px-3 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Генерация может занять <strong>10–40 секунд</strong> в зависимости от параметров.
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2" id="generateBtn">
+            <i class="bi bi-play-circle me-2"></i>Сгенерировать расписание
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status / last result -->
+  <div class="col-12 col-lg-7 col-xl-8">
+    {% if result %}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-check-circle me-2"></i>Последний результат</span>
+        <small class="text-muted fw-normal">{{ result.generated_at|slice:":19"|default:"" }}</small>
+      </div>
+      <div class="card-body">
+
+        <!-- Stats row -->
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-md-4">
+            <div class="stat-card">
+              <div class="stat-value">{{ result.quality_score }}%</div>
+              <div class="stat-label">Качество расписания</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="stat-card">
+              <div class="stat-value">{{ result.generations }}</div>
+              <div class="stat-label">Поколений</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="stat-card">
+              <div class="stat-value">{{ result.entries|length }}</div>
+              <div class="stat-label">Занятий в расписании</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quality bar -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span>Качество (мягкие ограничения)</span>
+            <span>{{ result.quality_score }}%</span>
+          </div>
+          <div class="progress quality-bar">
+            <div class="progress-bar
+              {% if result.quality_score >= 80 %}bg-success
+              {% elif result.quality_score >= 50 %}bg-warning
+              {% else %}bg-danger{% endif %}"
+              style="width: {{ result.quality_score }}%"></div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{% url 'schedule' %}?view=group" class="btn btn-primary btn-sm">
+            <i class="bi bi-table me-1"></i>Просмотреть расписание
+          </a>
+          <a href="{% url 'export' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download me-1"></i>Экспорт JSON
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fitness chart -->
+    {% if result.fitness_history %}
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-graph-up me-2"></i>График сходимости
+      </div>
+      <div class="card-body p-2">
+        <canvas id="fitnessChart" height="120"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="card">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-x" style="font-size:3rem;color:var(--accent);opacity:.5"></i>
+        <h5 class="mt-3 text-muted">Расписание ещё не сгенерировано</h5>
+        <p class="text-muted small">Настройте параметры и нажмите «Сгенерировать расписание»</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if result.fitness_history %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const history = {{ result.fitness_history|safe }};
+  const quality = history.map(f => +(f * 1000).toFixed(4));
+  const ctx = document.getElementById('fitnessChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: history.map((_, i) => i),
+      datasets: [{
+        label: 'Приспособленность × 1000',
+        data: quality,
+        borderColor: '#1a56db',
+        backgroundColor: 'rgba(26,86,219,.08)',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Поколение' }, ticks: { maxTicksLimit: 10 } },
+        y: { title: { display: true, text: 'Приспособленность × 1000' } }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
+
+<script>
+document.getElementById('generateForm').addEventListener('submit', function() {
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Генерация...';
+});
+</script>
+{% endblock %}

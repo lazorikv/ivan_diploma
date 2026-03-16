@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Генератор расписания{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #1a56db;
+      --primary-dark: #1240a8;
+      --primary-light: #e8efff;
+      --accent: #3b82f6;
+      --text-dark: #1e293b;
+      --text-muted: #64748b;
+      --border: #dbeafe;
+    }
+
+    body {
+      background: #f8faff;
+      color: var(--text-dark);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Navbar */
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.3px;
+    }
+    .navbar {
+      background: var(--primary) !important;
+      box-shadow: 0 2px 8px rgba(26,86,219,.25);
+    }
+    .navbar .nav-link {
+      color: rgba(255,255,255,.85) !important;
+      font-weight: 500;
+      transition: color .15s;
+    }
+    .navbar .nav-link:hover,
+    .navbar .nav-link.active {
+      color: #fff !important;
+    }
+    .navbar .nav-link.active {
+      border-bottom: 2px solid #fff;
+    }
+
+    /* Cards */
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(26,86,219,.07);
+    }
+    .card-header {
+      background: var(--primary-light);
+      border-bottom: 1px solid var(--border);
+      border-radius: 12px 12px 0 0 !important;
+      font-weight: 600;
+      color: var(--primary-dark);
+    }
+
+    /* Stat badge */
+    .stat-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+      transition: box-shadow .15s;
+    }
+    .stat-card:hover { box-shadow: 0 4px 12px rgba(26,86,219,.12); }
+    .stat-card .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1;
+    }
+    .stat-card .stat-label {
+      font-size: .8rem;
+      color: var(--text-muted);
+      margin-top: .35rem;
+    }
+    .stat-card.stat-success .stat-value { color: #16a34a; }
+    .stat-card.stat-danger .stat-value { color: #dc2626; }
+
+    /* Buttons */
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      border-color: var(--primary-dark);
+    }
+    .btn-outline-primary {
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    .btn-outline-primary:hover,
+    .btn-outline-primary.active {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    /* Schedule table */
+    .schedule-table {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      font-size: .82rem;
+    }
+    .schedule-table th {
+      background: var(--primary);
+      color: #fff;
+      padding: .5rem .75rem;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .schedule-table th.slot-col {
+      background: var(--primary-dark);
+      width: 110px;
+      min-width: 90px;
+    }
+    .schedule-table td {
+      vertical-align: top;
+      padding: .5rem .6rem;
+      border: 1px solid var(--border);
+      min-width: 120px;
+    }
+    .schedule-table tr:nth-child(even) td { background: #f5f8ff; }
+    .schedule-table tr:hover td { background: #edf2ff; }
+
+    /* Lesson cell */
+    .lesson-cell {
+      background: #fff;
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: .4rem .5rem;
+      font-size: .78rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      margin-bottom: 2px;
+    }
+    .lesson-cell.type-lec { border-color: var(--primary); }
+    .lesson-cell.type-prac { border-color: #22c55e; }
+    .lesson-cell.type-lab { border-color: #f59e0b; }
+    .lesson-cell .lesson-disc {
+      font-weight: 600;
+      color: var(--text-dark);
+      white-space: normal;
+      word-break: break-word;
+    }
+    .lesson-cell .lesson-meta {
+      color: var(--text-muted);
+      font-size: .72rem;
+      margin-top: .1rem;
+    }
+    .lesson-cell .lesson-type-badge {
+      display: inline-block;
+      font-size: .65rem;
+      padding: .1rem .35rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .badge-lec { background: #dbeafe; color: var(--primary-dark); }
+    .badge-prac { background: #dcfce7; color: #15803d; }
+    .badge-lab { background: #fef3c7; color: #b45309; }
+
+    /* Table wrapper for horizontal scroll */
+    .table-scroll-wrapper {
+      overflow-x: auto;
+      border-radius: 0 0 12px 12px;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: .75rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .filter-bar .form-select,
+    .filter-bar .form-control {
+      border-color: var(--border);
+      font-size: .875rem;
+    }
+    .filter-bar .form-select:focus,
+    .filter-bar .form-control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    }
+
+    /* Week toggle */
+    .week-toggle .btn {
+      font-size: .82rem;
+      padding: .35rem .8rem;
+    }
+
+    /* Quality bar */
+    .quality-bar { height: 8px; border-radius: 4px; }
+
+    /* Week labels inside cells */
+    .week-label-badge {
+      display: inline-block;
+      font-size: .6rem;
+      font-weight: 700;
+      border-radius: 3px;
+      padding: 0 .3rem;
+      line-height: 1.4;
+      margin-bottom: 2px;
+    }
+    .week-upper-badge { background: #dbeafe; color: #1e40af; }
+    .week-lower-badge { background: #fce7f3; color: #9d174d; }
+    .week-both-badge {
+      display: inline-block;
+      font-size: .6rem;
+      font-weight: 700;
+      border-radius: 3px;
+      padding: 0 .3rem;
+      line-height: 1.4;
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    /* Merged cell (same both weeks) */
+    .merged-cell { opacity: 1; }
+    .week-upper { border-left-width: 3px; }
+    .week-lower { border-left-width: 3px; opacity: .9; }
+
+    /* Violation highlight */
+    .lesson-cell.has-violation {
+      border-left: 3px solid #ef4444 !important;
+      background: #fff5f5 !important;
+    }
+    .violation-list {
+      margin-top: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    .violation-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: .58rem;
+      font-weight: 600;
+      padding: .1rem .35rem;
+      border-radius: 3px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
+      line-height: 1.4;
+    }
+
+    /* Week legend dot */
+    .week-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    /* Subgroup badge */
+    .subgroup-badge {
+      display: inline-block;
+      font-size: .6rem;
+      padding: .05rem .3rem;
+      border-radius: 3px;
+      background: #e2e8f0;
+      color: #475569;
+      margin-left: 3px;
+      font-weight: 600;
+    }
+
+    .schedule-cell { vertical-align: top; padding: .4rem .5rem; }
+    .schedule-cell-inner {
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      gap: 4px;
+      min-height: 100px;
+    }
+    /* merged занятие занимает обе строки */
+    .merged-cell-wrap { grid-row: 1 / 3; align-self: center; }
+    /* В — верхняя строка, Н — нижняя */
+    .slot-upper { grid-row: 1; }
+    .slot-lower { grid-row: 2; }
+
+    /* Page header */
+    .page-header {
+      background: linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
+      color: #fff;
+      padding: 1.5rem 1.5rem;
+      margin-bottom: 1.5rem;
+      border-radius: 0 0 16px 16px;
+    }
+    .page-header h1 { font-size: 1.4rem; font-weight: 700; margin: 0; }
+    .page-header p { opacity: .85; margin: .25rem 0 0; font-size: .9rem; }
+
+    /* Responsive adjustments */
+    @media (max-width: 576px) {
+      .schedule-table th,
+      .schedule-table td { padding: .35rem .4rem; font-size: .75rem; }
+      .lesson-cell { font-size: .72rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+  <div class="container-fluid px-3 px-md-4">
+    <a class="navbar-brand" href="{% url 'index' %}">
+      <i class="bi bi-calendar3 me-2"></i>Генератор расписания
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#navbarNav" aria-controls="navbarNav"
+            aria-expanded="false" aria-label="Меню">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link {% block nav_home %}{% endblock %}"
+             href="{% url 'index' %}">
+            <i class="bi bi-house me-1"></i>Главная
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_schedule %}{% endblock %}"
+             href="{% url 'schedule' %}">
+            <i class="bi bi-table me-1"></i>Расписание
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_data %}{% endblock %}"
+             href="{% url 'data' %}">
+            <i class="bi bi-database me-1"></i>Данные
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% block nav_upload %}{% endblock %}"
+             href="{% url 'upload_files' %}">
+            <i class="bi bi-upload me-1"></i>Загрузка данных
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'export' %}">
+            <i class="bi bi-download me-1"></i>Экспорт
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid px-3 px-md-4 py-3">
+  {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,147 @@
+{% extends "schedule/base.html" %}
+{% block title %}Загрузка данных — Генератор расписания{% endblock %}
+{% block nav_upload %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="container-fluid px-0">
+    <h1><i class="bi bi-upload me-2"></i>Загрузка данных</h1>
+    <p>Загрузите xlsx-файлы с данными о группах и преподавателях</p>
+  </div>
+</div>
+
+{% if messages %}
+<div class="mb-3">
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2 px-3" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+
+  <!-- Upload form -->
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-file-earmark-arrow-up me-2"></i>Загрузить файлы
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data" id="uploadForm">
+          {% csrf_token %}
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold" for="groups_xlsx">
+              <i class="bi bi-people me-1 text-primary"></i>Файл групп
+            </label>
+            <input type="file" id="groups_xlsx" name="groups_xlsx"
+                   class="form-control" accept=".xlsx,.xls" />
+            <div class="form-text">
+              Листы: <strong>Лист1</strong> (код группы, размер) и
+              <strong>Лист2</strong> (группа, дисциплина, часы лек/пр/лаб)
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold" for="teachers_xlsx">
+              <i class="bi bi-person-workspace me-1 text-primary"></i>Файл преподавателей
+            </label>
+            <input type="file" id="teachers_xlsx" name="teachers_xlsx"
+                   class="form-control" accept=".xlsx,.xls" />
+            <div class="form-text">
+              Лист <strong>Лист1</strong>: группа, дисц. (кратко), дисц. (полно),
+              преп. лек., преп. пр., преп. лаб1, преп. лаб2
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2" id="uploadBtn">
+            <i class="bi bi-cloud-upload me-2"></i>Загрузить
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current status -->
+  <div class="col-12 col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-info-circle me-2"></i>Текущие источники данных
+      </div>
+      <div class="card-body">
+
+        <!-- Groups file status -->
+        <div class="d-flex align-items-start gap-3 mb-3 p-3 rounded border
+          {% if status.groups_uploaded %}border-success bg-success bg-opacity-10{% else %}border-secondary bg-light{% endif %}">
+          <i class="bi {% if status.groups_uploaded %}bi-check-circle-fill text-success{% else %}bi-clock-history text-secondary{% endif %} fs-4 mt-1 flex-shrink-0"></i>
+          <div class="flex-grow-1 min-width-0">
+            <div class="fw-semibold mb-1">Файл групп</div>
+            {% if status.groups_uploaded %}
+            <div class="small text-success mb-1">Загружен пользователем</div>
+            {% else %}
+            <div class="small text-muted mb-1">Используется файл по умолчанию</div>
+            {% endif %}
+            <code class="small text-break">{{ status.groups_filename }}</code>
+          </div>
+          {% if status.groups_uploaded %}
+          <form method="post" action="{% url 'delete_upload' 'groups' %}" class="flex-shrink-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm"
+                    title="Удалить и вернуться к файлу по умолчанию"
+                    onclick="return confirm('Удалить загруженный файл групп?')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+        <!-- Teachers file status -->
+        <div class="d-flex align-items-start gap-3 p-3 rounded border
+          {% if status.teachers_uploaded %}border-success bg-success bg-opacity-10{% else %}border-secondary bg-light{% endif %}">
+          <i class="bi {% if status.teachers_uploaded %}bi-check-circle-fill text-success{% else %}bi-clock-history text-secondary{% endif %} fs-4 mt-1 flex-shrink-0"></i>
+          <div class="flex-grow-1 min-width-0">
+            <div class="fw-semibold mb-1">Файл преподавателей</div>
+            {% if status.teachers_uploaded %}
+            <div class="small text-success mb-1">Загружен пользователем</div>
+            {% else %}
+            <div class="small text-muted mb-1">Используется файл по умолчанию</div>
+            {% endif %}
+            <code class="small text-break">{{ status.teachers_filename }}</code>
+          </div>
+          {% if status.teachers_uploaded %}
+          <form method="post" action="{% url 'delete_upload' 'teachers' %}" class="flex-shrink-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm"
+                    title="Удалить и вернуться к файлу по умолчанию"
+                    onclick="return confirm('Удалить загруженный файл преподавателей?')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+        <div class="alert alert-primary py-2 px-3 small mt-3 mb-0">
+          <i class="bi bi-lightbulb me-1"></i>
+          После загрузки новых файлов вернитесь на главную и запустите
+          <strong>генерацию расписания</strong>.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function() {
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
+});
+</script>
+{% endblock %}
