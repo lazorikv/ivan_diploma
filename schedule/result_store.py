@@ -23,6 +23,18 @@ LESSON_TYPE_LABELS = {"lec": "Лекция", "prac": "Практика", "lab": 
 WEEK_LABELS = {1: "Верхняя (нечётная)", 2: "Нижняя (чётная)"}
 
 
+def split_teachers(raw: str) -> list[str]:
+    """
+    Split a teacher cell that may contain multiple teachers.
+    Example: "Комисова Е.И., доц. Бешевли Б.И., ст.преп. Кочура Д.А."
+    """
+    text = (raw or "").strip()
+    if not text or text in {"?", "."}:
+        return []
+    parts = [p.strip() for p in text.split(",") if p and p.strip()]
+    return parts or [text]
+
+
 def chromosome_to_entries(
     chromosome: list[int],
     lessons: list[Lesson],
@@ -109,11 +121,12 @@ def group_by_teacher(entries: list[dict]) -> dict[str, dict]:
     """Organise entries into {teacher: {week: {day: {slot: entry}}}}."""
     result: dict[str, Any] = {}
     for e in entries:
-        t = e["teacher"]
-        if not t or t == "?":
+        teachers = split_teachers(e.get("teacher", ""))
+        if not teachers:
             continue
         w = e["week"]
         d = e["day"]
         s = e["slot"]
-        result.setdefault(t, {}).setdefault(w, {}).setdefault(d, {})[s] = e
+        for t in teachers:
+            result.setdefault(t, {}).setdefault(w, {}).setdefault(d, {})[s] = e
     return result

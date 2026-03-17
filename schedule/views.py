@@ -27,6 +27,7 @@ from schedule.result_store import (
     group_by_teacher,
     load_result,
     save_result,
+    split_teachers,
 )
 
 
@@ -317,8 +318,8 @@ def data_view(request):
     # Unique teachers
     teachers: dict[str, set] = defaultdict(set)
     for lesson in lessons:
-        if lesson.teacher and lesson.teacher != "?":
-            teachers[lesson.teacher].add(lesson.discipline_full or lesson.discipline_short)
+        for t in split_teachers(lesson.teacher):
+            teachers[t].add(lesson.discipline_full or lesson.discipline_short)
 
     # Build group summary: code, size, splits_labs
     GROUP_SPLIT_THRESHOLD = 18

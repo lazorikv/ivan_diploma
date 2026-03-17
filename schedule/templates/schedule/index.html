@@ -75,126 +75,114 @@
     </div>
   </div>
 
-  <!-- Status / last result -->
+  <!-- Actions -->
   <div class="col-12 col-lg-7 col-xl-8">
-    {% if result %}
-    <div class="card mb-3">
-      <div class="card-header d-flex align-items-center justify-content-between">
-        <span><i class="bi bi-check-circle me-2"></i>Последний результат</span>
-        <small class="text-muted fw-normal">{{ result.generated_at|slice:":19"|default:"" }}</small>
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-lightning-charge me-2"></i>Действия
       </div>
       <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+          <div class="fw-semibold">Быстрый доступ</div>
+          {% if result %}
+            <span class="badge" style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0">
+              <i class="bi bi-check2-circle me-1"></i>Есть сгенерированное расписание
+            </span>
+          {% else %}
+            <span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1">
+              <i class="bi bi-info-circle me-1"></i>Сначала сгенерируй расписание
+            </span>
+          {% endif %}
+        </div>
 
-        <!-- Stats row -->
-        <div class="row g-3 mb-3">
-          <div class="col-6 col-md-4">
-            <div class="stat-card">
-              <div class="stat-value">{{ result.quality_score }}%</div>
-              <div class="stat-label">Качество расписания</div>
-            </div>
-          </div>
-          <div class="col-6 col-md-4">
-            <div class="stat-card">
-              <div class="stat-value">{{ result.generations }}</div>
-              <div class="stat-label">Поколений</div>
-            </div>
-          </div>
+        <div class="row g-3">
           <div class="col-12 col-md-4">
-            <div class="stat-card">
-              <div class="stat-value">{{ result.entries|length }}</div>
-              <div class="stat-label">Занятий в расписании</div>
-            </div>
+            <a class="text-decoration-none" href="{% url 'schedule' %}?view=group">
+              <div class="stat-card h-100 text-start">
+                <div class="d-flex align-items-start justify-content-between">
+                  <div>
+                    <div class="fw-bold" style="color:var(--primary-dark);">
+                      Расписание
+                    </div>
+                    <div class="text-muted small mt-1">
+                      Просмотр по группам и преподавателям, верх/низ в одной сетке.
+                    </div>
+                  </div>
+                  <div class="ms-2" style="font-size:1.3rem;color:var(--primary);">
+                    <i class="bi bi-table"></i>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <span class="btn btn-primary btn-sm">
+                    Открыть <i class="bi bi-arrow-right ms-1"></i>
+                  </span>
+                </div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <a class="text-decoration-none" href="{% url 'data' %}">
+              <div class="stat-card h-100 text-start">
+                <div class="d-flex align-items-start justify-content-between">
+                  <div>
+                    <div class="fw-bold" style="color:var(--primary-dark);">
+                      Исходные данные
+                    </div>
+                    <div class="text-muted small mt-1">
+                      Группы (с численностью), преподаватели и дисциплины из Excel.
+                    </div>
+                  </div>
+                  <div class="ms-2" style="font-size:1.3rem;color:var(--primary);">
+                    <i class="bi bi-database"></i>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <span class="btn btn-outline-primary btn-sm">
+                    Посмотреть <i class="bi bi-arrow-right ms-1"></i>
+                  </span>
+                </div>
+              </div>
+            </a>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <a class="text-decoration-none" href="{% url 'export' %}">
+              <div class="stat-card h-100 text-start">
+                <div class="d-flex align-items-start justify-content-between">
+                  <div>
+                    <div class="fw-bold" style="color:var(--primary-dark);">
+                      Экспорт результата
+                    </div>
+                    <div class="text-muted small mt-1">
+                      Скачать <code>schedule_result.json</code> для анализа/отчёта.
+                    </div>
+                  </div>
+                  <div class="ms-2" style="font-size:1.3rem;color:var(--primary);">
+                    <i class="bi bi-download"></i>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <span class="btn btn-outline-primary btn-sm">
+                    Скачать <i class="bi bi-arrow-right ms-1"></i>
+                  </span>
+                </div>
+              </div>
+            </a>
           </div>
         </div>
 
-        <!-- Quality bar -->
-        <div class="mb-3">
-          <div class="d-flex justify-content-between small text-muted mb-1">
-            <span>Качество (мягкие ограничения)</span>
-            <span>{{ result.quality_score }}%</span>
-          </div>
-          <div class="progress quality-bar">
-            <div class="progress-bar
-              {% if result.quality_score >= 80 %}bg-success
-              {% elif result.quality_score >= 50 %}bg-warning
-              {% else %}bg-danger{% endif %}"
-              style="width: {{ result.quality_score }}%"></div>
-          </div>
-        </div>
-
-        <div class="d-flex gap-2 flex-wrap">
-          <a href="{% url 'schedule' %}?view=group" class="btn btn-primary btn-sm">
-            <i class="bi bi-table me-1"></i>Просмотреть расписание
-          </a>
-          <a href="{% url 'export' %}" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-download me-1"></i>Экспорт JSON
-          </a>
+        <div class="text-muted small mt-3">
+          Совет: сначала нажми <strong>Сгенерировать расписание</strong>, потом открывай таблицу или экспорт.
         </div>
       </div>
     </div>
-
-    <!-- Fitness chart -->
-    {% if result.fitness_history %}
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-graph-up me-2"></i>График сходимости
-      </div>
-      <div class="card-body p-2">
-        <canvas id="fitnessChart" height="120"></canvas>
-      </div>
-    </div>
-    {% endif %}
-
-    {% else %}
-    <div class="card">
-      <div class="card-body text-center py-5">
-        <i class="bi bi-calendar-x" style="font-size:3rem;color:var(--accent);opacity:.5"></i>
-        <h5 class="mt-3 text-muted">Расписание ещё не сгенерировано</h5>
-        <p class="text-muted small">Настройте параметры и нажмите «Сгенерировать расписание»</p>
-      </div>
-    </div>
-    {% endif %}
   </div>
 
 </div>
 {% endblock %}
 
 {% block extra_js %}
-{% if result.fitness_history %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script>
-(function() {
-  const history = {{ result.fitness_history|safe }};
-  const quality = history.map(f => +(f * 1000).toFixed(4));
-  const ctx = document.getElementById('fitnessChart').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: history.map((_, i) => i),
-      datasets: [{
-        label: 'Приспособленность × 1000',
-        data: quality,
-        borderColor: '#1a56db',
-        backgroundColor: 'rgba(26,86,219,.08)',
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: true,
-        tension: 0.3,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { title: { display: true, text: 'Поколение' }, ticks: { maxTicksLimit: 10 } },
-        y: { title: { display: true, text: 'Приспособленность × 1000' } }
-      }
-    }
-  });
-})();
-</script>
-{% endif %}
-
 <script>
 document.getElementById('generateForm').addEventListener('submit', function() {
   const btn = document.getElementById('generateBtn');
