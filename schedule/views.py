@@ -31,6 +31,21 @@ from schedule.result_store import (
 )
 
 
+def _format_generated_at(value: str | None) -> str:
+    if not value:
+        return ""
+    s = str(value).strip()
+    if "T" in s:
+        date_part, time_part = s.split("T", 1)
+        time_part = time_part.split(".", 1)[0]
+        ymd = date_part.split("-", 2)
+        if len(ymd) == 3:
+            y, m, d = ymd
+            return f"{d}.{m}.{y} {time_part}"
+        return f"{date_part} {time_part}"
+    return s
+
+
 def index(request):
     result = load_result()
     status = get_upload_status()
@@ -40,6 +55,7 @@ def index(request):
     )
     context = {
         "result": result,
+        "generated_at_human": _format_generated_at(result.get("generated_at") if result else None),
         "default_population": 20,
         "default_generations": 100,
         "files_missing": files_missing,
@@ -281,6 +297,7 @@ def schedule_view(request):
 
     context = {
         "result": result,
+        "generated_at_human": _format_generated_at(result.get("generated_at")),
         "view_type": view_type,
         "selected_entity": selected_entity,
         "entities": entities,
