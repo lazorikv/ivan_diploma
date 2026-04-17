@@ -3,6 +3,7 @@
 {% block nav_schedule %}active{% endblock %}
 
 {% block content %}
+<div id="schedule-nav-config" class="d-none" data-is-group="{% if view_type == 'group' %}1{% else %}0{% endif %}"></div>
 <div class="page-header">
   <div class="container-fluid px-0">
     <h1><i class="bi bi-table me-2"></i>Расписание занятий</h1>
@@ -16,22 +17,42 @@
     <div class="col-12 col-sm-auto">
       <div class="small fw-semibold mb-1">Просмотр</div>
       <div class="btn-group">
-        <a href="?view=group&entity={{ selected_entity }}"
+        <a href="?view=group&amp;potok={{ potok_key_str }}&amp;day={{ selected_day }}"
            class="btn btn-sm {% if view_type == 'group' %}btn-primary{% else %}btn-outline-primary{% endif %}">
           <i class="bi bi-people me-1"></i>По группам
         </a>
-        <a href="?view=teacher&entity={{ selected_entity }}"
+        <a href="?view=teacher&amp;entity={{ selected_entity }}&amp;day={{ selected_day }}"
            class="btn btn-sm {% if view_type == 'teacher' %}btn-primary{% else %}btn-outline-primary{% endif %}">
           <i class="bi bi-person-badge me-1"></i>По преподавателям
         </a>
       </div>
     </div>
+    {% if view_type == 'group' %}
+    <div class="col-12 col-sm col-md-5 col-lg-4">
+      <div class="small fw-semibold mb-1">Поток (курс)</div>
+      <select id="streamPotokSelect" class="form-select form-select-sm">
+        {% for opt in potok_options %}
+        <option value="{{ opt.key }}" {% if opt.key == potok_key_str %}selected{% endif %}>{{ opt.label }}</option>
+        {% empty %}
+        <option value="0">Нет данных потоков</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% else %}
     <div class="col-12 col-sm col-md-4 col-lg-3">
       <div class="small fw-semibold mb-1">{{ entity_label }}</div>
-      <select class="form-select form-select-sm"
-              onchange="location.href='?view={{ view_type }}&entity='+encodeURIComponent(this.value)">
+      <select id="entitySelect" class="form-select form-select-sm">
         {% for entity in entities %}
         <option value="{{ entity }}" {% if entity == selected_entity %}selected{% endif %}>{{ entity }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-12 col-sm col-md-3 col-lg-2">
+      <div class="small fw-semibold mb-1">День недели</div>
+      <select id="daySelect" class="form-select form-select-sm">
+        {% for day_name in day_names %}
+        <option value="{{ forloop.counter }}" {% if selected_day == forloop.counter %}selected{% endif %}>{{ day_name }}</option>
         {% endfor %}
       </select>
     </div>
@@ -63,25 +84,43 @@
 <div class="card">
   <div class="card-header">
     <i class="bi bi-calendar-week me-2"></i>
+    {% if view_type == 'group' %}
+    <strong>{{ potok_label }}</strong>
+    &nbsp;—&nbsp; {{ selected_day_name }} (верхняя и нижняя неделя)
+    {% else %}
     <strong>{{ selected_entity }}</strong>
-    &nbsp;—&nbsp; верхняя и нижняя неделя
+    &nbsp;—&nbsp; {{ selected_day_name }} (верхняя и нижняя неделя)
+    {% endif %}
   </div>
   <div class="table-scroll-wrapper">
-    <table class="schedule-table">
+    <table class="schedule-table{% if print_sheet %} print-sheet stream-grid{% endif %}">
       <thead>
+        {% if view_type == 'group' %}
         <tr>
           <th class="slot-col">Пара</th>
-          {% for day_name in day_names %}
-          <th>{{ day_name }}</th>
+          {% for g in potok_groups %}
+          <th class="stream-group-head">{{ g }}</th>
           {% endfor %}
         </tr>
+        {% else %}
+        <tr>
+          <th class="slot-col">Пара</th>
+          <th>{{ selected_day_name }}</th>
+        </tr>
+        {% endif %}
       </thead>
       <tbody>
         {% for row in grid_rows %}
         <tr>
           <!-- Slot label -->
-          <td class="slot-col" style="background:var(--primary-light);text-align:center;vertical-align:middle;white-space:nowrap;">
+          <td class="slot-col{% if print_sheet %} slot-col-print{% else %} slot-col-week{% endif %}"
+              style="text-align:center;vertical-align:middle;white-space:nowrap;">
+            {% if use_roman_slots %}
+            <div class="roman-label">{{ row.slot_roman }}</div>
+            <div class="roman-slot-time">{{ row.slot_time }}</div>
+            {% else %}
             <div style="font-weight:700;color:var(--primary-dark);font-size:.9rem;">{{ row.slot }}</div>
+            {% endif %}
           </td>
 
           {% for cell in row.cells %}
@@ -182,4 +221,43 @@
     </table>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var cfg = document.getElementById('schedule-nav-config');
+  var isGroup = cfg && cfg.dataset.isGroup === '1';
+  var daySel = document.getElementById('daySelect');
+  if (!daySel) return;
+  daySel.addEventListener('change', function () {
+    var q;
+    if (isGroup) {
+      var p = document.getElementById('streamPotokSelect');
+      q = '?view=group&potok=' + encodeURIComponent(p.value);
+    } else {
+      var e = document.getElementById('entitySelect');
+      q = '?view=teacher&entity=' + encodeURIComponent(e.value);
+    }
+    q += '&day=' + encodeURIComponent(daySel.value || '1');
+    location.href = q;
+  });
+  var potokSel = document.getElementById('streamPotokSelect');
+  if (potokSel) {
+    potokSel.addEventListener('change', function () {
+      var q = '?view=group&potok=' + encodeURIComponent(potokSel.value);
+      q += '&day=' + encodeURIComponent(daySel.value || '1');
+      location.href = q;
+    });
+  }
+  var entSel = document.getElementById('entitySelect');
+  if (entSel) {
+    entSel.addEventListener('change', function () {
+      var q = '?view=teacher&entity=' + encodeURIComponent(entSel.value);
+      q += '&day=' + encodeURIComponent(daySel.value || '1');
+      location.href = q;
+    });
+  }
+})();
+</script>
 {% endblock %}

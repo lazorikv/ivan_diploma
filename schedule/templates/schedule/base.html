@@ -125,6 +125,55 @@
       width: 110px;
       min-width: 90px;
     }
+    .schedule-table td.slot-col-week {
+      background: var(--primary-light);
+    }
+    .schedule-table td.slot-col-print {
+      background: #f5f5f5 !important;
+    }
+    /* Один день — «бумажный» вид как в ведомости */
+    .schedule-table.print-sheet th {
+      background: #ececec;
+      color: #111;
+      border: 1px solid #000 !important;
+    }
+    .schedule-table.print-sheet th.slot-col {
+      background: #e0e0e0;
+      color: #111;
+    }
+    .schedule-table.print-sheet td {
+      border: 1px solid #000 !important;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .schedule-table.print-sheet .schedule-cell-inner {
+      text-align: left;
+    }
+    .roman-label {
+      font-family: Georgia, 'Times New Roman', Times, serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1.1;
+      color: #111;
+    }
+    .roman-slot-time {
+      font-size: .65rem;
+      color: #444;
+      margin-top: 2px;
+    }
+    .schedule-table.stream-grid th.stream-group-head {
+      min-width: 86px;
+      max-width: 140px;
+      font-size: .72rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .schedule-table.stream-grid .schedule-cell {
+      min-width: 86px;
+    }
+    .schedule-table.stream-grid .lesson-cell {
+      font-size: .72rem;
+    }
     .schedule-table td {
       vertical-align: top;
       padding: .5rem .6rem;
@@ -331,7 +380,7 @@
         </li>
         <li class="nav-item">
           <a class="nav-link {% block nav_schedule %}{% endblock %}"
-             href="{% url 'schedule' %}">
+             href="{% url 'schedule' %}?view=group&amp;day=1">
             <i class="bi bi-table me-1"></i>Расписание
           </a>
         </li>
