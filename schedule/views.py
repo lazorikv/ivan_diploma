@@ -327,9 +327,11 @@ def schedule_view(request):
         by_entity_w2 = group_by_group([e for e in all_entries if e["week"] == 2])
         entity_label = "Группа"
 
-    entities = _sort_entity_codes(
-        sorted(set(by_entity_w1.keys()) | set(by_entity_w2.keys()))
-    )
+    entity_keys = set(by_entity_w1.keys()) | set(by_entity_w2.keys())
+    if view_type == "teacher":
+        entities = sorted(entity_keys, key=lambda s: s.casefold())
+    else:
+        entities = _sort_entity_codes(sorted(entity_keys))
     selected_entity = request.GET.get("entity", entities[0] if entities else "")
     if selected_entity not in set(by_entity_w1.keys()) | set(by_entity_w2.keys()):
         selected_entity = entities[0] if entities else ""
