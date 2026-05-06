@@ -3,11 +3,28 @@
 {% block nav_schedule %}active{% endblock %}
 
 {% block content %}
-<div id="schedule-nav-config" class="d-none" data-is-group="{% if view_type == 'group' %}1{% else %}0{% endif %}"></div>
+{% if messages %}
+<div class="mb-3">
+  {% for message in messages %}
+  <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-{{ message.tags }}{% endif %} alert-dismissible fade show py-2 px-3" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+<div id="schedule-nav-config" class="d-none"
+     data-is-group="{% if view_type == 'group' %}1{% else %}0{% endif %}"
+     data-schedule-range="{{ schedule_range }}"></div>
 <div class="page-header">
   <div class="container-fluid px-0">
     <h1><i class="bi bi-table me-2"></i>Расписание занятий</h1>
-    <p>Сгенерировано: {{ generated_at_human }}
+    <p class="mb-1">Сгенерировано: {{ generated_at_human }}</p>
+    <p class="small mb-0" style="opacity:.88">
+      <i class="bi bi-arrow-down-up me-1"></i><strong>В</strong>/<strong>Н</strong> в занятиях —
+      это <strong>верхняя и нижняя учебная неделя</strong> ({{ week_upper_label }}, {{ week_lower_label }}).
+      Совпадает в обе — бейдж «В/Н». Это не то же самое, что переключатель «Пн–Пт» (там просто все будни).
+    </p>
   </div>
 </div>
 
@@ -17,7 +34,7 @@
     <div class="col-12 col-sm-auto">
       <div class="small fw-semibold mb-1">Просмотр</div>
       <div class="btn-group">
-        <a href="?view=group&amp;potok={{ potok_key_str }}&amp;day={{ selected_day }}"
+        <a href="?view=group&amp;potok={{ potok_key_str }}&amp;range=week"
            class="btn btn-sm {% if view_type == 'group' %}btn-primary{% else %}btn-outline-primary{% endif %}">
           <i class="bi bi-people me-1"></i>По группам
         </a>
@@ -28,7 +45,7 @@
       </div>
     </div>
     {% if view_type == 'group' %}
-    <div class="col-12 col-sm col-md-5 col-lg-4">
+    <div class="col-12 col-sm col-md-4 col-lg-3">
       <div class="small fw-semibold mb-1">Поток (курс)</div>
       <select id="streamPotokSelect" class="form-select form-select-sm">
         {% for opt in potok_options %}
@@ -37,6 +54,20 @@
         <option value="0">Нет данных потоков</option>
         {% endfor %}
       </select>
+    </div>
+    <div class="col-12 col-sm-auto">
+      <div class="small fw-semibold mb-1">Период</div>
+      <div class="btn-group">
+        <a href="?view=group&amp;potok={{ potok_key_str }}&amp;range=week"
+           class="btn btn-sm {% if schedule_range == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+           title="Показать понедельник–пятницу одним скроллом">
+          Пн–Пт
+        </a>
+        <a href="?view=group&amp;potok={{ potok_key_str }}&amp;range=day&amp;day={{ selected_day }}"
+           class="btn btn-sm {% if schedule_range == 'day' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          Один день
+        </a>
+      </div>
     </div>
     {% else %}
     <div class="col-12 col-sm col-md-4 col-lg-3">
@@ -48,9 +79,9 @@
       </select>
     </div>
     {% endif %}
-    <div class="col-12 col-sm col-md-3 col-lg-2">
+    <div class="col-12 col-sm col-md-3 col-lg-2 {% if view_type == 'group' and schedule_range == 'week' %}d-none{% endif %}" id="daySelectWrap">
       <div class="small fw-semibold mb-1">День недели</div>
-      <select id="daySelect" class="form-select form-select-sm">
+      <select id="daySelect" class="form-select form-select-sm" {% if view_type == 'group' and schedule_range == 'week' %}disabled{% endif %}>
         {% for day_name in day_names %}
         <option value="{{ forloop.counter }}" {% if selected_day == forloop.counter %}selected{% endif %}>{{ day_name }}</option>
         {% endfor %}
@@ -69,51 +100,69 @@
           <span class="week-dot" style="background:#f59e0b"></span>Лаб. работа
         </span>
         <span class="badge py-1 px-2" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1">
-          <span style="font-size:.6rem;font-weight:700;margin-right:3px">В</span>верхняя
-          &nbsp;<span style="font-size:.6rem;font-weight:700;margin-right:3px">Н</span>нижняя
+          В/Н: {{ week_upper_label }}, {{ week_lower_label }}
         </span>
         <span class="badge py-1 px-2" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>Нарушение
         </span>
+        {% if view_type == 'group' %}
+        <span class="badge text-bg-secondary small">Клик → в ячейку или обмен</span>
+        {% endif %}
       </div>
     </div>
   </div>
+  {% if week_stack %}
+  <div class="mt-2 d-flex flex-wrap gap-1 align-items-center">
+    <span class="small text-muted me-1"><i class="bi bi-hash me-1"></i>Перейти:</span>
+    {% for d in day_grids %}
+    <a class="btn btn-sm btn-outline-secondary py-0 px-2 stream-day-anchor" href="#{{ d.anchor_id }}">{{ d.day_name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 
-<!-- Schedule table: верхняя и нижняя в одной таблице -->
+{% if week_stack %}
+{% for day_block in day_grids %}
+<div class="card mb-4 schedule-week-section" id="{{ day_block.anchor_id }}">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>
+      <i class="bi bi-calendar-week me-2"></i>
+      <strong>{{ potok_label }}</strong>
+      &nbsp;—&nbsp;<strong>{{ day_block.day_name }}</strong>
+      <span class="text-muted small">({{ week_upper_label }}, {{ week_lower_label }})</span>
+    </span>
+  </div>
+  {% include "schedule/includes/group_stream_table.html" with grid_rows=day_block.grid_rows potok_groups=potok_groups use_roman_slots=use_roman_slots print_sheet=False %}
+</div>
+{% endfor %}
+{% else %}
+<!-- Single day / teacher -->
 <div class="card">
   <div class="card-header">
     <i class="bi bi-calendar-week me-2"></i>
     {% if view_type == 'group' %}
     <strong>{{ potok_label }}</strong>
-    &nbsp;—&nbsp; {{ selected_day_name }} (верхняя и нижняя неделя)
+    &nbsp;—&nbsp; {{ selected_day_name }} ({{ week_upper_label }}, {{ week_lower_label }})
     {% else %}
     <strong>{{ selected_entity }}</strong>
-    &nbsp;—&nbsp; {{ selected_day_name }} (верхняя и нижняя неделя)
+    &nbsp;—&nbsp; {{ selected_day_name }} ({{ week_upper_label }}, {{ week_lower_label }})
     {% endif %}
   </div>
+  {% if view_type == 'group' %}
+  {% include "schedule/includes/group_stream_table.html" with grid_rows=grid_rows potok_groups=potok_groups use_roman_slots=use_roman_slots print_sheet=print_sheet %}
+  {% else %}
   <div class="table-scroll-wrapper">
-    <table class="schedule-table{% if print_sheet %} print-sheet stream-grid{% endif %}">
+    <table class="schedule-table">
       <thead>
-        {% if view_type == 'group' %}
         <tr>
-          <th class="slot-col">Пара</th>
-          {% for g in potok_groups %}
-          <th class="stream-group-head">{{ g }}</th>
-          {% endfor %}
-        </tr>
-        {% else %}
-        <tr>
-          <th class="slot-col">Пара</th>
+          <th class="slot-col sticky-slot-col">Пара</th>
           <th>{{ selected_day_name }}</th>
         </tr>
-        {% endif %}
       </thead>
       <tbody>
         {% for row in grid_rows %}
         <tr>
-          <!-- Slot label -->
-          <td class="slot-col{% if print_sheet %} slot-col-print{% else %} slot-col-week{% endif %}"
+          <td class="slot-col{% if print_sheet %} slot-col-print{% else %} slot-col-week{% endif %} sticky-slot-col"
               style="text-align:center;vertical-align:middle;white-space:nowrap;">
             {% if use_roman_slots %}
             <div class="roman-label">{{ row.slot_roman }}</div>
@@ -122,26 +171,20 @@
             <div style="font-weight:700;color:var(--primary-dark);font-size:.9rem;">{{ row.slot }}</div>
             {% endif %}
           </td>
-
           {% for cell in row.cells %}
           <td class="schedule-cell">
             <div class="schedule-cell-inner">
             {% if cell.merged %}
-              {# Одинаково в обе недели — карточка занимает обе строки сетки #}
-              {% if cell.w1 %}
-              {% with viol=cell.v1 %}
-              <div class="lesson-cell type-{{ cell.w1.lesson_type }} merged-cell merged-cell-wrap{% if viol %} has-violation{% endif %}">
-                <div class="lesson-disc">{{ cell.w1.discipline_short }}</div>
+              {% if cell.merged_entry %}
+              {% with entry=cell.merged_entry viol=cell.merged_viol %}
+              <div class="lesson-cell type-{{ entry.lesson_type }} merged-cell merged-cell-wrap{% if viol %} has-violation{% endif %}">
+                <div class="lesson-disc">{{ entry.discipline_short }}</div>
                 <div class="lesson-meta">
-                  {% if view_type == 'group' %}
-                    <i class="bi bi-person-fill me-1"></i>{{ cell.w1.teacher }}
-                  {% else %}
-                    <i class="bi bi-people-fill me-1"></i>{{ cell.w1.group }}
-                  {% endif %}
-                  {% if cell.w1.subgroup %}<span class="subgroup-badge">П{{ cell.w1.subgroup }}</span>{% endif %}
+                  <i class="bi bi-people-fill me-1"></i>{{ entry.group }}
+                  {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
                 </div>
                 <div class="mt-1 d-flex align-items-center gap-1">
-                  <span class="lesson-type-badge badge-{{ cell.w1.lesson_type }}">{{ cell.w1.lesson_type_label }}</span>
+                  <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
                   <span class="week-both-badge">В/Н</span>
                 </div>
                 {% if viol %}
@@ -153,25 +196,18 @@
               {% endwith %}
               {% endif %}
             {% else %}
-              {# В — row 1 (верхняя неделя), Н — row 2 (нижняя неделя) #}
-
-              {# Верхняя строка: В если есть, иначе пусто #}
               <div class="slot-upper">
-                {% if cell.w1 %}
-                {% with viol=cell.v1 %}
-                <div class="lesson-cell type-{{ cell.w1.lesson_type }} week-upper{% if viol %} has-violation{% endif %}">
+                {% for item in cell.w1_items %}
+                {% with entry=item.entry viol=item.viol %}
+                <div class="lesson-cell type-{{ entry.lesson_type }} week-upper{% if viol %} has-violation{% endif %}">
                   <span class="week-label-badge week-upper-badge">В</span>
-                  <div class="lesson-disc">{{ cell.w1.discipline_short }}</div>
+                  <div class="lesson-disc">{{ entry.discipline_short }}</div>
                   <div class="lesson-meta">
-                    {% if view_type == 'group' %}
-                      <i class="bi bi-person-fill me-1"></i>{{ cell.w1.teacher }}
-                    {% else %}
-                      <i class="bi bi-people-fill me-1"></i>{{ cell.w1.group }}
-                    {% endif %}
-                    {% if cell.w1.subgroup %}<span class="subgroup-badge">П{{ cell.w1.subgroup }}</span>{% endif %}
+                    <i class="bi bi-people-fill me-1"></i>{{ entry.group }}
+                    {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
                   </div>
                   <div class="mt-1">
-                    <span class="lesson-type-badge badge-{{ cell.w1.lesson_type }}">{{ cell.w1.lesson_type_label }}</span>
+                    <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
                   </div>
                   {% if viol %}
                   <div class="violation-list">
@@ -180,26 +216,20 @@
                   {% endif %}
                 </div>
                 {% endwith %}
-                {% endif %}
+                {% endfor %}
               </div>
-
-              {# Нижняя строка: Н если есть, иначе пусто #}
               <div class="slot-lower">
-                {% if cell.w2 %}
-                {% with viol=cell.v2 %}
-                <div class="lesson-cell type-{{ cell.w2.lesson_type }} week-lower{% if viol %} has-violation{% endif %}">
+                {% for item in cell.w2_items %}
+                {% with entry=item.entry viol=item.viol %}
+                <div class="lesson-cell type-{{ entry.lesson_type }} week-lower{% if viol %} has-violation{% endif %}">
                   <span class="week-label-badge week-lower-badge">Н</span>
-                  <div class="lesson-disc">{{ cell.w2.discipline_short }}</div>
+                  <div class="lesson-disc">{{ entry.discipline_short }}</div>
                   <div class="lesson-meta">
-                    {% if view_type == 'group' %}
-                      <i class="bi bi-person-fill me-1"></i>{{ cell.w2.teacher }}
-                    {% else %}
-                      <i class="bi bi-people-fill me-1"></i>{{ cell.w2.group }}
-                    {% endif %}
-                    {% if cell.w2.subgroup %}<span class="subgroup-badge">П{{ cell.w2.subgroup }}</span>{% endif %}
+                    <i class="bi bi-people-fill me-1"></i>{{ entry.group }}
+                    {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
                   </div>
                   <div class="mt-1">
-                    <span class="lesson-type-badge badge-{{ cell.w2.lesson_type }}">{{ cell.w2.lesson_type_label }}</span>
+                    <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
                   </div>
                   {% if viol %}
                   <div class="violation-list">
@@ -208,9 +238,8 @@
                   {% endif %}
                 </div>
                 {% endwith %}
-                {% endif %}
+                {% endfor %}
               </div>
-
             {% endif %}
             </div>
           </td>
@@ -220,7 +249,72 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
 </div>
+{% endif %}
+
+<!-- Move lesson modal (поток) -->
+{% if view_type == 'group' %}
+<div class="modal fade" id="scheduleMoveModal" tabindex="-1" aria-labelledby="scheduleMoveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scheduleMoveModalLabel">Разместить в ячейке</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+      </div>
+      <form method="post" action="{% url 'schedule_move' %}" id="scheduleMoveForm">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+        <input type="hidden" name="group" id="moveGroup" value="" />
+        <input type="hidden" name="discipline_short" id="moveDiscipline" value="" />
+        <input type="hidden" name="teacher" id="moveTeacher" value="" />
+        <input type="hidden" name="subgroup" id="moveSubgroup" value="0" />
+        <input type="hidden" name="old_day" id="moveOldDay" value="" />
+        <input type="hidden" name="old_slot" id="moveOldSlot" value="" />
+        <input type="hidden" name="cell_is_merged" id="cellIsMerged" value="0" />
+        <input type="hidden" name="split_source_week" id="splitSourceWeek" value="" />
+        <div class="modal-body">
+          <p class="small text-muted mb-2">Учётный период: {{ week_upper_label }} / {{ week_lower_label }} (<strong>В</strong> и <strong>Н</strong> в сетке).</p>
+          <p class="small text-muted mb-3" id="moveSummary"></p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="targetWeek">Неделя в целевой ячейке</label>
+            <select class="form-select form-select-sm" name="target_week" id="targetWeek" required>
+              <option value="both" selected>Обе (у каждой строкы своя верхняя/нижняя)</option>
+              <option value="upper">{{ week_upper_label }} (В)</option>
+              <option value="lower">{{ week_lower_label }} (Н)</option>
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small" for="moveNewDay">День</label>
+              <select class="form-select form-select-sm" name="new_day" id="moveNewDay" required>
+                {% for day_name in day_names %}
+                <option value="{{ forloop.counter }}">{{ day_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small" for="moveNewSlot">Пара</label>
+              <select class="form-select form-select-sm" name="new_slot" id="moveNewSlot" required>
+                <option value="1">I</option>
+                <option value="2">II</option>
+                <option value="3">III</option>
+                <option value="4">IV</option>
+                <option value="5">V</option>
+                <option value="6">VI</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary btn-sm">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -228,35 +322,96 @@
 (function () {
   var cfg = document.getElementById('schedule-nav-config');
   var isGroup = cfg && cfg.dataset.isGroup === '1';
+  var range = cfg ? (cfg.dataset.scheduleRange || 'week') : 'week';
   var daySel = document.getElementById('daySelect');
-  if (!daySel) return;
-  daySel.addEventListener('change', function () {
-    var q;
-    if (isGroup) {
-      var p = document.getElementById('streamPotokSelect');
-      q = '?view=group&potok=' + encodeURIComponent(p.value);
+  var dayWrap = document.getElementById('daySelectWrap');
+
+  function groupQuery(potokVal) {
+    var q = '?view=group&potok=' + encodeURIComponent(potokVal);
+    if (range === 'week') {
+      q += '&range=week';
     } else {
-      var e = document.getElementById('entitySelect');
-      q = '?view=teacher&entity=' + encodeURIComponent(e.value);
+      q += '&range=day&day=' + encodeURIComponent(daySel ? daySel.value || '1' : '1');
     }
-    q += '&day=' + encodeURIComponent(daySel.value || '1');
-    location.href = q;
-  });
+    return q;
+  }
+
+  if (daySel && dayWrap && !dayWrap.classList.contains('d-none')) {
+    daySel.addEventListener('change', function () {
+      var q;
+      if (isGroup) {
+        var p = document.getElementById('streamPotokSelect');
+        q = groupQuery(p ? p.value : '');
+      } else {
+        var e = document.getElementById('entitySelect');
+        q = '?view=teacher&entity=' + encodeURIComponent(e.value);
+        q += '&day=' + encodeURIComponent(daySel.value || '1');
+      }
+      location.href = q;
+    });
+  }
   var potokSel = document.getElementById('streamPotokSelect');
   if (potokSel) {
     potokSel.addEventListener('change', function () {
-      var q = '?view=group&potok=' + encodeURIComponent(potokSel.value);
-      q += '&day=' + encodeURIComponent(daySel.value || '1');
-      location.href = q;
+      location.href = groupQuery(potokSel.value);
     });
   }
   var entSel = document.getElementById('entitySelect');
   if (entSel) {
     entSel.addEventListener('change', function () {
       var q = '?view=teacher&entity=' + encodeURIComponent(entSel.value);
-      q += '&day=' + encodeURIComponent(daySel.value || '1');
+      q += '&day=' + encodeURIComponent(daySel ? daySel.value || '1' : '1');
       location.href = q;
     });
+  }
+
+  if (isGroup) {
+    var moveModalEl = document.getElementById('scheduleMoveModal');
+    var summaryEl = document.getElementById('moveSummary');
+    var bsModal = null;
+    if (moveModalEl && typeof bootstrap !== 'undefined') {
+      bsModal = new bootstrap.Modal(moveModalEl);
+    }
+
+  function openMoveFrom(btn) {
+    var merged = btn.getAttribute('data-edit-merged') === '1';
+    document.getElementById('cellIsMerged').value = merged ? '1' : '0';
+    var splitWeek = document.getElementById('splitSourceWeek');
+    splitWeek.value = merged ? '' : (btn.getAttribute('data-edit-week') || '');
+
+    document.getElementById('moveGroup').value = btn.getAttribute('data-edit-group') || '';
+    document.getElementById('moveDiscipline').value = btn.getAttribute('data-edit-discipline') || '';
+    document.getElementById('moveTeacher').value = btn.getAttribute('data-edit-teacher') || '';
+    document.getElementById('moveSubgroup').value = btn.getAttribute('data-edit-subgroup') || '0';
+    document.getElementById('moveOldDay').value = btn.getAttribute('data-edit-day') || '';
+    document.getElementById('moveOldSlot').value = btn.getAttribute('data-edit-slot') || '';
+    document.getElementById('targetWeek').value = 'both';
+    summaryEl.innerHTML =
+      '<strong>' + escapeHtml(btn.getAttribute('data-edit-discipline') || '') + '</strong>, группа '
+      + escapeHtml(btn.getAttribute('data-edit-group') || '')
+      + ' — выбери день, пару и верхнюя/нижняя или обе; если ячейка занята, местами поменяется с тем занятием.';
+    document.getElementById('moveNewDay').value = btn.getAttribute('data-edit-day') || '1';
+    document.getElementById('moveNewSlot').value = btn.getAttribute('data-edit-slot') || '1';
+    if (bsModal) {
+      bsModal.show();
+    }
+  }
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  document.querySelectorAll('.lesson-cell-clickable').forEach(function (el) {
+    el.addEventListener('click', function () { openMoveFrom(el); });
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        openMoveFrom(el);
+      }
+    });
+  });
+
   }
 })();
 </script>

@@ -105,6 +105,11 @@ def load_result() -> dict | None:
         return None
 
 
+def write_schedule_result_document(doc: dict[str, Any]) -> None:
+    """Persist whole schedule JSON (same shape as load_result). Used after manual edits."""
+    RESULT_FILE.write_text(json.dumps(doc, ensure_ascii=False, indent=2))
+
+
 def group_by_group(entries: list[dict]) -> dict[str, dict]:
     """Organise entries into {group: {week: {day: {slot: entry}}}}."""
     result: dict[str, Any] = {}
@@ -118,7 +123,7 @@ def group_by_group(entries: list[dict]) -> dict[str, dict]:
 
 
 def group_by_teacher(entries: list[dict]) -> dict[str, dict]:
-    """Organise entries into {teacher: {week: {day: {slot: entry}}}}."""
+    """Organise entries into {teacher: {week: {day: {slot: [entry, ...]}}}}."""
     result: dict[str, Any] = {}
     for e in entries:
         teachers = split_teachers(e.get("teacher", ""))
@@ -128,5 +133,5 @@ def group_by_teacher(entries: list[dict]) -> dict[str, dict]:
         d = e["day"]
         s = e["slot"]
         for t in teachers:
-            result.setdefault(t, {}).setdefault(w, {}).setdefault(d, {})[s] = e
+            result.setdefault(t, {}).setdefault(w, {}).setdefault(d, {}).setdefault(s, []).append(e)
     return result

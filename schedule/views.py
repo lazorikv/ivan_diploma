@@ -7,6 +7,7 @@ from pathlib import Path
 from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from schedule.data_loader import (
@@ -23,11 +24,13 @@ from schedule.ga.fitness import compute_stats
 from schedule.result_store import (
     DAY_NAMES,
     SLOT_TIMES,
+    WEEK_LABELS,
     group_by_group,
     group_by_teacher,
     load_result,
     save_result,
     split_teachers,
+    write_schedule_result_document,
 )
 
 # Римские номера пар (в модели 6 пар в день)
@@ -68,6 +71,47 @@ def _weekday_or_monday(raw: str | None) -> int:
     """День недели 1–5 (Пн–Пт); без параметра или при мусоре — понедельник."""
     d = _parse_day_param(raw)
     return d if d is not None else 1
+
+
+def _parse_schedule_range(raw: str | None, view_type: str) -> str:
+    """Для просмотра по группам: week (по умолчанию) или day. Для преподавателя — только day."""
+    if view_type != "group":
+        return "day"
+    s = (raw or "").strip().lower()
+    return "day" if s == "day" else "week"
+
+
+def _build_stream_grid_rows(
+    day_idx: int,
+    potok_groups: list[str],
+    by_entity_w1: dict,
+    by_entity_w2: dict,
+    violations_for,
+) -> list[dict]:
+    """Одна таблица потока: строки = пары, колонки = группы, день = day_idx."""
+    column_days_groups = [(day_idx, g) for g in potok_groups]
+    grid_rows: list[dict] = []
+    for slot_idx in range(1, 7):
+        cells = []
+        for d_i, grp in column_days_groups:
+            w1g = by_entity_w1.get(grp, {}).get(1, {})
+            w2g = by_entity_w2.get(grp, {}).get(2, {})
+            c1 = w1g.get(d_i, {}).get(slot_idx)
+            c2 = w2g.get(d_i, {}).get(slot_idx)
+            cells.append({
+                "w1": c1,
+                "w2": c2,
+                "merged": _cell_equal(c1, c2),
+                "v1": violations_for(c1),
+                "v2": violations_for(c2),
+            })
+        grid_rows.append({
+            "slot": slot_idx,
+            "slot_roman": SLOT_ROMAN[slot_idx - 1],
+            "slot_time": SLOT_TIMES[slot_idx - 1],
+            "cells": cells,
+        })
+    return grid_rows
 
 
 def _groups_for_course(year: int, entities: list[str]) -> list[str]:
@@ -308,6 +352,18 @@ def _cell_equal(c1: dict | None, c2: dict | None) -> bool:
     )
 
 
+def _teacher_slot_entries(week_data: dict, day_idx: int, slot_idx: int) -> list[dict]:
+    slot_payload = week_data.get(day_idx, {}).get(slot_idx)
+    if slot_payload is None:
+        return []
+    if isinstance(slot_payload, list):
+        return slot_payload
+    # Backward compatibility with old shape {slot: entry}
+    if isinstance(slot_payload, dict):
+        return [slot_payload]
+    return []
+
+
 def schedule_view(request):
     result = load_result()
     if result is None:
@@ -337,6 +393,7 @@ def schedule_view(request):
         selected_entity = entities[0] if entities else ""
 
     selected_day = _weekday_or_monday(request.GET.get("day"))
+    schedule_range = _parse_schedule_range(request.GET.get("range"), view_type)
 
     # Pre-compute violation map for ALL entries (used to highlight bad cells)
     vmap = _build_violation_map(entries)
@@ -409,44 +466,46 @@ def schedule_view(request):
         potok_key_str = str(int(potok_key))
 
     grid_rows: list[dict] = []
+    day_grids: list[dict] = []
 
     if view_type == "group":
-        column_days_groups = [(selected_day, g) for g in potok_groups]
-
-        for slot_idx in range(1, 7):
-            cells = []
-            for day_idx, grp in column_days_groups:
-                w1g = by_entity_w1.get(grp, {}).get(1, {})
-                w2g = by_entity_w2.get(grp, {}).get(2, {})
-                c1 = w1g.get(day_idx, {}).get(slot_idx)
-                c2 = w2g.get(day_idx, {}).get(slot_idx)
-                cells.append({
-                    "w1": c1,
-                    "w2": c2,
-                    "merged": _cell_equal(c1, c2),
-                    "v1": _violations_for(c1),
-                    "v2": _violations_for(c2),
+        if schedule_range == "week":
+            for d in range(1, 6):
+                day_grids.append({
+                    "day": d,
+                    "day_name": DAY_NAMES[d - 1],
+                    "anchor_id": f"stream-day-{d}",
+                    "grid_rows": _build_stream_grid_rows(
+                        d, potok_groups, by_entity_w1, by_entity_w2, _violations_for
+                    ),
                 })
-            grid_rows.append({
-                "slot": slot_idx,
-                "slot_roman": SLOT_ROMAN[slot_idx - 1],
-                "slot_time": SLOT_TIMES[slot_idx - 1],
-                "cells": cells,
-            })
+        else:
+            grid_rows = _build_stream_grid_rows(
+                selected_day,
+                potok_groups,
+                by_entity_w1,
+                by_entity_w2,
+                _violations_for,
+            )
     else:
         w1_data = by_entity_w1.get(selected_entity, {}).get(1, {})
         w2_data = by_entity_w2.get(selected_entity, {}).get(2, {})
         for slot_idx in range(1, 7):
             cells = []
             for day_idx in [selected_day]:
-                c1 = w1_data.get(day_idx, {}).get(slot_idx)
-                c2 = w2_data.get(day_idx, {}).get(slot_idx)
+                c1_items = _teacher_slot_entries(w1_data, day_idx, slot_idx)
+                c2_items = _teacher_slot_entries(w2_data, day_idx, slot_idx)
+                merged = (
+                    len(c1_items) == 1
+                    and len(c2_items) == 1
+                    and _cell_equal(c1_items[0], c2_items[0])
+                )
                 cells.append({
-                    "w1": c1,
-                    "w2": c2,
-                    "merged": _cell_equal(c1, c2),
-                    "v1": _violations_for(c1),
-                    "v2": _violations_for(c2),
+                    "w1_items": [{"entry": e, "viol": _violations_for(e)} for e in c1_items],
+                    "w2_items": [{"entry": e, "viol": _violations_for(e)} for e in c2_items],
+                    "merged": merged,
+                    "merged_entry": c1_items[0] if merged else None,
+                    "merged_viol": _violations_for(c1_items[0]) if merged else [],
                 })
             grid_rows.append({
                 "slot": slot_idx,
@@ -457,8 +516,8 @@ def schedule_view(request):
 
     use_roman_slots = view_type == "group"
     stream_mode = view_type == "group"
-    print_sheet = view_type == "group"
-
+    print_sheet = view_type == "group" and schedule_range == "day"
+    week_stack = view_type == "group" and schedule_range == "week"
     context = {
         "result": result,
         "generated_at_human": _format_generated_at(result.get("generated_at")),
@@ -467,6 +526,8 @@ def schedule_view(request):
         "entities": entities,
         "entity_label": entity_label,
         "grid_rows": grid_rows,
+        "day_grids": day_grids,
+        "schedule_range": schedule_range,
         "day_names": DAY_NAMES,
         "selected_day": selected_day,
         "selected_day_name": DAY_NAMES[selected_day - 1],
@@ -477,8 +538,327 @@ def schedule_view(request):
         "use_roman_slots": use_roman_slots,
         "stream_mode": stream_mode,
         "print_sheet": print_sheet,
+        "week_upper_label": WEEK_LABELS.get(1, "Верхняя неделя"),
+        "week_lower_label": WEEK_LABELS.get(2, "Нижняя неделя"),
+        "week_stack": week_stack,
     }
     return render(request, "schedule/schedule.html", context)
+
+
+
+
+def _normalize_dest_week_post(raw: str | None) -> int | None:
+    """На целевом слоте: None — сохранять week у каждой строки; 1/2 — задать одну неделю."""
+    s = (raw or "").strip().lower()
+    if s in ("both", "оба", "keep", "", "same"):
+        return None
+    if s in ("upper", "1", "в"):
+        return 1
+    if s in ("lower", "2", "н"):
+        return 2
+    return -1
+
+
+def _resolve_restrict_weeks_for_move_post(request) -> tuple[frozenset[int] | None, bool]:
+    """
+    Какую строку(и) взять с исходного слота: объединённая ячейка — всегда обе;
+    половина В/Н — из hidden split_source_week.
+    """
+    cell_is_merged = request.POST.get("cell_is_merged") == "1"
+    if cell_is_merged:
+        return None, True
+
+    sw = request.POST.get("split_source_week", "").strip()
+    if sw == "1":
+        return frozenset({1}), True
+    if sw == "2":
+        return frozenset({2}), True
+    return frozenset(), False
+
+
+def _apply_slot_coords(e: dict, *, day: int, slot: int, week_val: int) -> None:
+    e["day"] = day
+    e["slot"] = slot
+    e["week"] = week_val
+    e["day_name"] = DAY_NAMES[day - 1]
+    e["slot_time"] = SLOT_TIMES[slot - 1]
+
+
+def _find_blocker_same_slot(
+    entries: list[dict],
+    mover_set: set[int],
+    *,
+    group: str,
+    subgroup: int,
+    week: int,
+    day: int,
+    slot: int,
+    skip_idxs: set[int] | None = None,
+) -> int | None:
+    skip = skip_idxs or set()
+    for j, o in enumerate(entries):
+        if j in mover_set or j in skip:
+            continue
+        if o.get("group") != group:
+            continue
+        if int(o.get("subgroup") or 0) != subgroup:
+            continue
+        if int(o.get("week") or 0) != week:
+            continue
+        if o.get("day") != day or o.get("slot") != slot:
+            continue
+        return j
+    return None
+
+
+def _perform_place_or_swap(
+    entries: list[dict],
+    mover_indices: list[int],
+    *,
+    new_day: int,
+    new_slot: int,
+    dest_week_override: int | None,
+) -> int:
+    """
+    Ставим каждое перенесённое занятие в (new_day, new_slot [, week]).
+    Если слот уже занят — меняется местами с тем занятием. Без ошибок блокировки.
+    Возвращает число выполненных обменов (пар).
+    """
+    mover_set = set(mover_indices)
+    swaps = 0
+    skip_blockers: set[int] = set()
+
+    movers_sorted = sorted(
+        mover_indices,
+        key=lambda ix: (int(entries[ix].get("week") or 0), ix),
+    )
+
+    for mi in movers_sorted:
+        row = entries[mi]
+        g = str(row.get("group") or "")
+        sg = int(row.get("subgroup") or 0)
+        old_d = int(row.get("day") or 1)
+        old_s = int(row.get("slot") or 1)
+        ow = int(row.get("week") or 1)
+
+        tgt_w = int(dest_week_override) if dest_week_override in (1, 2) else ow
+
+        bi = _find_blocker_same_slot(
+            entries,
+            mover_set,
+            group=g,
+            subgroup=sg,
+            week=tgt_w,
+            day=new_day,
+            slot=new_slot,
+            skip_idxs=skip_blockers,
+        )
+
+        if bi is not None:
+            blocker = dict(entries[bi])
+            swaps += 1
+            skip_blockers.add(bi)
+            entries[bi] = blocker
+            _apply_slot_coords(entries[bi], day=old_d, slot=old_s, week_val=ow)
+
+        mover_row = dict(row)
+        entries[mi] = mover_row
+        _apply_slot_coords(entries[mi], day=new_day, slot=new_slot, week_val=tgt_w)
+
+    return swaps
+
+
+def _norm_compact(s: str) -> str:
+    return " ".join((s or "").split()).strip().casefold()
+
+
+def _resolve_move_indices(
+    entries: list[dict],
+    *,
+    restrict_weeks: frozenset[int] | None,
+    group: str,
+    old_day: int,
+    old_slot: int,
+    discipline_short: str,
+    teacher: str,
+    subgroup: int,
+) -> list[int]:
+    """
+    Ручной перенос: в первую очередь слот (группа, день, пара, подгруппа, неделя).
+    Дисциплина/преподаватель из формы — подсказка для уточнения, не жёсткое равенство.
+    """
+    candidates: list[int] = []
+    for i, e in enumerate(entries):
+        if e.get("group") != group:
+            continue
+        if e.get("day") != old_day or e.get("slot") != old_slot:
+            continue
+        if (e.get("subgroup") or 0) != subgroup:
+            continue
+        ew = e.get("week")
+        if ew not in (1, 2):
+            continue
+        if restrict_weeks is not None and ew not in restrict_weeks:
+            continue
+        candidates.append(i)
+
+    if not candidates:
+        return []
+
+    narrowed = candidates
+    nd = _norm_compact(discipline_short)
+    if nd:
+        by_disc = [
+            i
+            for i in narrowed
+            if _norm_compact(str(entries[i].get("discipline_short") or "")) == nd
+        ]
+        if by_disc:
+            narrowed = by_disc
+
+    nt = _norm_compact(teacher)
+    if nt and len(narrowed) > 1:
+        by_t = [
+            i
+            for i in narrowed
+            if _norm_compact(str(entries[i].get("teacher") or "")) == nt
+        ]
+        if by_t:
+            narrowed = by_t
+
+    return narrowed
+
+
+def _schedule_redirect_path(raw_next: str) -> str:
+    if raw_next.startswith("/") and not raw_next.startswith("//"):
+        return raw_next
+    return reverse("schedule")
+
+
+@require_POST
+def schedule_move(request):
+    next_path = _schedule_redirect_path((request.POST.get("next") or "").strip())
+
+    result = load_result()
+    if result is None:
+        messages.error(request, "Нет сохранённого расписания.")
+        return redirect("index")
+
+    restrict_weeks, scope_ok = _resolve_restrict_weeks_for_move_post(request)
+
+    dest_week_override = _normalize_dest_week_post(
+        request.POST.get("target_week") or request.POST.get("dest_week")
+    )
+    dest_invalid = dest_week_override not in (None, 1, 2)
+
+    group = (request.POST.get("group") or "").strip()
+    discipline_short = (request.POST.get("discipline_short") or "").strip()
+    teacher = (request.POST.get("teacher") or "").strip()
+
+    try:
+        subgroup = int(request.POST.get("subgroup") or 0)
+    except (ValueError, TypeError):
+        subgroup = 0
+
+    try:
+        old_day = int(request.POST.get("old_day") or 0)
+        old_slot = int(request.POST.get("old_slot") or 0)
+        new_day = int(request.POST.get("new_day") or 0)
+        new_slot = int(request.POST.get("new_slot") or 0)
+    except (ValueError, TypeError):
+        messages.error(request, "Некорректные номера дня или пары.")
+        return redirect(next_path)
+
+    if not scope_ok:
+        messages.error(
+            request,
+            "Не определена исходная строка (В/Н) — для половины ячейки обновите страницу.",
+        )
+        return redirect(next_path)
+
+    if dest_invalid:
+        messages.error(request, "Некорректный выбор целевой учебной недели.")
+        return redirect(next_path)
+
+    if not group:
+        messages.error(request, "Не указана группа.")
+        return redirect(next_path)
+
+    if not (
+        1 <= old_day <= 5
+        and 1 <= old_slot <= 6
+        and 1 <= new_day <= 5
+        and 1 <= new_slot <= 6
+    ):
+        messages.error(request, "День или пара вне допустимого диапазона.")
+        return redirect(next_path)
+
+    entries = list(result["entries"])
+
+    indices = _resolve_move_indices(
+        entries,
+        restrict_weeks=restrict_weeks,
+        group=group,
+        old_day=old_day,
+        old_slot=old_slot,
+        discipline_short=discipline_short,
+        teacher=teacher,
+        subgroup=subgroup,
+    )
+    if not indices and restrict_weeks is not None:
+        indices = _resolve_move_indices(
+            entries,
+            restrict_weeks=None,
+            group=group,
+            old_day=old_day,
+            old_slot=old_slot,
+            discipline_short=discipline_short,
+            teacher=teacher,
+            subgroup=subgroup,
+        )
+
+    if not indices:
+        messages.warning(request, "На исходном слоте не найдено занятие — файл не меняли.")
+        return redirect(next_path)
+
+    primary_disc = (
+        discipline_short.strip()
+        or str(entries[indices[0]].get("discipline_short") or "").strip()
+    )
+
+    dest_ov = dest_week_override if dest_week_override in (1, 2) else None
+
+    swaps = _perform_place_or_swap(
+        entries,
+        indices,
+        new_day=new_day,
+        new_slot=new_slot,
+        dest_week_override=dest_ov,
+    )
+
+    result["entries"] = entries
+    write_schedule_result_document(result)
+
+    label = primary_disc[:40] + ("…" if len(primary_disc) > 40 else "")
+    wl1 = WEEK_LABELS.get(1, "верхняя неделя")
+    wl2 = WEEK_LABELS.get(2, "нижняя неделя")
+
+    dest_note = ""
+    if dest_week_override == 1:
+        dest_note = f" Слот: {wl1}."
+    elif dest_week_override == 2:
+        dest_note = f" Слот: {wl2}."
+    else:
+        dest_note = " У строк сохранены прежние В/Н (или пара строк)."
+
+    swap_note = f" Обменено местами пар: {swaps}." if swaps else ""
+
+    messages.success(
+        request,
+        f"Поставлено: {label} ({group}) → {DAY_NAMES[new_day - 1]}, пара {new_slot}.{dest_note}{swap_note}",
+    )
+
+    return redirect(next_path)
 
 
 def data_view(request):

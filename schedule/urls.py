@@ -6,6 +6,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("generate/", views.generate, name="generate"),
     path("schedule/", views.schedule_view, name="schedule"),
+    path("schedule/move/", views.schedule_move, name="schedule_move"),
     path("data/", views.data_view, name="data"),
     path("export/", views.export_view, name="export"),
     path("upload/", views.upload_files, name="upload_files"),

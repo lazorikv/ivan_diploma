@@ -1,0 +1,130 @@
+{# grid_rows, potok_groups, use_roman_slots, print_sheet — group stream #}
+<div class="table-scroll-wrapper">
+  <table class="schedule-table stream-grid{% if print_sheet %} print-sheet{% endif %}">
+    <thead>
+      <tr>
+        <th class="slot-col sticky-slot-col">Пара</th>
+        {% for g in potok_groups %}
+        <th class="stream-group-head">{{ g }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in grid_rows %}
+      <tr>
+        <td class="slot-col{% if print_sheet %} slot-col-print{% else %} slot-col-week{% endif %} sticky-slot-col"
+            style="text-align:center;vertical-align:middle;white-space:nowrap;">
+          {% if use_roman_slots %}
+          <div class="roman-label">{{ row.slot_roman }}</div>
+          <div class="roman-slot-time">{{ row.slot_time }}</div>
+          {% else %}
+          <div style="font-weight:700;color:var(--primary-dark);font-size:.9rem;">{{ row.slot }}</div>
+          {% endif %}
+        </td>
+        {% for cell in row.cells %}
+        <td class="schedule-cell">
+          <div class="schedule-cell-inner">
+          {% if cell.merged %}
+            {% if cell.w1 %}
+            {% with viol=cell.v1 entry=cell.w1 %}
+            <div class="lesson-cell lesson-cell-clickable type-{{ entry.lesson_type }} merged-cell merged-cell-wrap{% if viol %} has-violation{% endif %}"
+                 role="button" tabindex="0"
+                 data-edit-merged="1"
+                 data-edit-group="{{ entry.group }}"
+                 data-edit-day="{{ entry.day }}"
+                 data-edit-slot="{{ entry.slot }}"
+                 data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
+                 data-edit-discipline="{{ entry.discipline_short }}"
+                 data-edit-teacher="{{ entry.teacher }}"
+                 data-edit-other-week="">
+              <div class="lesson-disc">{{ entry.discipline_short }}</div>
+              <div class="lesson-meta">
+                <i class="bi bi-person-fill me-1"></i>{{ entry.teacher }}
+                {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
+              </div>
+              <div class="mt-1 d-flex align-items-center gap-1">
+                <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
+                <span class="week-both-badge">В/Н</span>
+              </div>
+              {% if viol %}
+              <div class="violation-list">
+                {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endwith %}
+            {% endif %}
+          {% else %}
+            <div class="slot-upper">
+              {% if cell.w1 %}
+              {% with viol=cell.v1 entry=cell.w1 %}
+              <div class="lesson-cell lesson-cell-clickable type-{{ entry.lesson_type }} week-upper{% if viol %} has-violation{% endif %}"
+                   role="button" tabindex="0"
+                   data-edit-merged="0"
+                   data-edit-week="{{ entry.week }}"
+                   data-edit-group="{{ entry.group }}"
+                   data-edit-day="{{ entry.day }}"
+                   data-edit-slot="{{ entry.slot }}"
+                   data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
+                   data-edit-discipline="{{ entry.discipline_short }}"
+                   data-edit-teacher="{{ entry.teacher }}"
+                   data-edit-other-week="{% if cell.w2 %}1{% endif %}">
+                <span class="week-label-badge week-upper-badge">В</span>
+                <div class="lesson-disc">{{ entry.discipline_short }}</div>
+                <div class="lesson-meta">
+                  <i class="bi bi-person-fill me-1"></i>{{ entry.teacher }}
+                  {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
+                </div>
+                <div class="mt-1">
+                  <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
+                </div>
+                {% if viol %}
+                <div class="violation-list">
+                  {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endwith %}
+              {% endif %}
+            </div>
+            <div class="slot-lower">
+              {% if cell.w2 %}
+              {% with viol=cell.v2 entry=cell.w2 %}
+              <div class="lesson-cell lesson-cell-clickable type-{{ entry.lesson_type }} week-lower{% if viol %} has-violation{% endif %}"
+                   role="button" tabindex="0"
+                   data-edit-merged="0"
+                   data-edit-week="{{ entry.week }}"
+                   data-edit-group="{{ entry.group }}"
+                   data-edit-day="{{ entry.day }}"
+                   data-edit-slot="{{ entry.slot }}"
+                   data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
+                   data-edit-discipline="{{ entry.discipline_short }}"
+                   data-edit-teacher="{{ entry.teacher }}"
+                   data-edit-other-week="{% if cell.w1 %}1{% endif %}">
+                <span class="week-label-badge week-lower-badge">Н</span>
+                <div class="lesson-disc">{{ entry.discipline_short }}</div>
+                <div class="lesson-meta">
+                  <i class="bi bi-person-fill me-1"></i>{{ entry.teacher }}
+                  {% if entry.subgroup %}<span class="subgroup-badge">П{{ entry.subgroup }}</span>{% endif %}
+                </div>
+                <div class="mt-1">
+                  <span class="lesson-type-badge badge-{{ entry.lesson_type }}">{{ entry.lesson_type_label }}</span>
+                </div>
+                {% if viol %}
+                <div class="violation-list">
+                  {% for v in viol %}<span class="violation-badge"><i class="bi bi-exclamation-triangle-fill"></i>{{ v }}</span>{% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              {% endwith %}
+              {% endif %}
+            </div>
+          {% endif %}
+          </div>
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
