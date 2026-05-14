@@ -734,6 +734,36 @@ def _ensure_movers_cover_both_weeks(
     return added, blocked
 
 
+def _dedupe_exact_slot_lesson_rows(entries: list[dict]) -> int:
+    """
+    Убирает точные дубли одной и той же пары в одной и той же ячейке.
+    Нужен после ручного редактирования, чтобы не ловить ложный "Конфликт группы".
+    """
+    seen: set[tuple] = set()
+    unique_rows: list[dict] = []
+    removed = 0
+    for e in entries:
+        key = (
+            str(e.get("group") or ""),
+            int(e.get("subgroup") or 0),
+            int(e.get("week") or 0),
+            int(e.get("day") or 0),
+            int(e.get("slot") or 0),
+            str(e.get("discipline_short") or ""),
+            str(e.get("teacher") or ""),
+            str(e.get("lesson_type") or ""),
+        )
+        if key in seen:
+            removed += 1
+            continue
+        seen.add(key)
+        unique_rows.append(e)
+
+    if removed:
+        entries[:] = unique_rows
+    return removed
+
+
 def _norm_compact(s: str) -> str:
     return " ".join((s or "").split()).strip().casefold()
 
@@ -912,6 +942,8 @@ def schedule_move(request):
             slot=new_slot,
         )
 
+    dedup_removed = _dedupe_exact_slot_lesson_rows(entries)
+
     result["entries"] = entries
     write_schedule_result_document(result)
 
@@ -935,10 +967,11 @@ def schedule_move(request):
         both_note = f" Добавлено копий на вторую неделю: {both_added}."
         if both_blocked:
             both_note += " Для части строк занято другой парой — оставлены без дублирования."
+    dedup_note = f" Удалены дубли строк: {dedup_removed}." if dedup_removed else ""
 
     messages.success(
         request,
-        f"Поставлено: {label} ({group}) → {DAY_NAMES[new_day - 1]}, пара {new_slot}.{dest_note}{swap_note}{both_note}",
+        f"Поставлено: {label} ({group}) → {DAY_NAMES[new_day - 1]}, пара {new_slot}.{dest_note}{swap_note}{both_note}{dedup_note}",
     )
 
     return redirect(next_path)
