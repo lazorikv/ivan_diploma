@@ -550,8 +550,10 @@ def schedule_view(request):
 def _normalize_dest_week_post(raw: str | None) -> int | None:
     """На целевом слоте: None — сохранять week у каждой строки; 1/2 — задать одну неделю."""
     s = (raw or "").strip().lower()
-    if s in ("both", "оба", "keep", "", "same"):
+    if s in ("keep", "", "same"):
         return None
+    if s in ("both", "оба"):
+        return 0
     if s in ("upper", "1", "в"):
         return 1
     if s in ("lower", "2", "н"):
@@ -668,6 +670,70 @@ def _perform_place_or_swap(
     return swaps
 
 
+def _entry_identity_signature(e: dict) -> tuple:
+    return (
+        str(e.get("discipline_short") or ""),
+        str(e.get("teacher") or ""),
+        int(e.get("subgroup") or 0),
+        str(e.get("lesson_type") or ""),
+    )
+
+
+def _ensure_movers_cover_both_weeks(
+    entries: list[dict],
+    mover_indices: list[int],
+    *,
+    day: int,
+    slot: int,
+) -> tuple[int, int]:
+    """
+    Для выбранных строк на (day, slot) пытаемся гарантировать В+Н.
+    Возвращает (сколько копий добавлено, сколько раз блокировало чужое занятие).
+    """
+    added = 0
+    blocked = 0
+    produced_keys: set[tuple] = set()
+
+    for mi in mover_indices:
+        if mi < 0 or mi >= len(entries):
+            continue
+        row = entries[mi]
+        g = str(row.get("group") or "")
+        sg = int(row.get("subgroup") or 0)
+        w = int(row.get("week") or 0)
+        if w not in (1, 2):
+            continue
+        other_w = 2 if w == 1 else 1
+        sig = _entry_identity_signature(row)
+        prod_key = (g, sg, sig, day, slot, other_w)
+        if prod_key in produced_keys:
+            continue
+
+        same_slot_other_week = [
+            e for e in entries
+            if str(e.get("group") or "") == g
+            and int(e.get("subgroup") or 0) == sg
+            and int(e.get("week") or 0) == other_w
+            and int(e.get("day") or 0) == day
+            and int(e.get("slot") or 0) == slot
+        ]
+        if not same_slot_other_week:
+            clone = dict(row)
+            _apply_slot_coords(clone, day=day, slot=slot, week_val=other_w)
+            entries.append(clone)
+            produced_keys.add(prod_key)
+            added += 1
+            continue
+
+        if any(_entry_identity_signature(e) == sig for e in same_slot_other_week):
+            produced_keys.add(prod_key)
+            continue
+
+        blocked += 1
+
+    return added, blocked
+
+
 def _norm_compact(s: str) -> str:
     return " ".join((s or "").split()).strip().casefold()
 
@@ -749,7 +815,7 @@ def schedule_move(request):
     dest_week_override = _normalize_dest_week_post(
         request.POST.get("target_week") or request.POST.get("dest_week")
     )
-    dest_invalid = dest_week_override not in (None, 1, 2)
+    dest_invalid = dest_week_override not in (None, 0, 1, 2)
 
     group = (request.POST.get("group") or "").strip()
     discipline_short = (request.POST.get("discipline_short") or "").strip()
@@ -826,6 +892,7 @@ def schedule_move(request):
         or str(entries[indices[0]].get("discipline_short") or "").strip()
     )
 
+    expand_to_both = dest_week_override == 0
     dest_ov = dest_week_override if dest_week_override in (1, 2) else None
 
     swaps = _perform_place_or_swap(
@@ -835,6 +902,15 @@ def schedule_move(request):
         new_slot=new_slot,
         dest_week_override=dest_ov,
     )
+    both_added = 0
+    both_blocked = 0
+    if expand_to_both:
+        both_added, both_blocked = _ensure_movers_cover_both_weeks(
+            entries,
+            indices,
+            day=new_day,
+            slot=new_slot,
+        )
 
     result["entries"] = entries
     write_schedule_result_document(result)
@@ -848,14 +924,21 @@ def schedule_move(request):
         dest_note = f" Слот: {wl1}."
     elif dest_week_override == 2:
         dest_note = f" Слот: {wl2}."
+    elif dest_week_override == 0:
+        dest_note = f" Слот: обе недели ({wl1}/{wl2})."
     else:
         dest_note = " У строк сохранены прежние В/Н (или пара строк)."
 
     swap_note = f" Обменено местами пар: {swaps}." if swaps else ""
+    both_note = ""
+    if expand_to_both:
+        both_note = f" Добавлено копий на вторую неделю: {both_added}."
+        if both_blocked:
+            both_note += " Для части строк занято другой парой — оставлены без дублирования."
 
     messages.success(
         request,
-        f"Поставлено: {label} ({group}) → {DAY_NAMES[new_day - 1]}, пара {new_slot}.{dest_note}{swap_note}",
+        f"Поставлено: {label} ({group}) → {DAY_NAMES[new_day - 1]}, пара {new_slot}.{dest_note}{swap_note}{both_note}",
     )
 
     return redirect(next_path)
