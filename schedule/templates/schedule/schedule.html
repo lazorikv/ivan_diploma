@@ -268,6 +268,7 @@
         <input type="hidden" name="group" id="moveGroup" value="" />
         <input type="hidden" name="discipline_short" id="moveDiscipline" value="" />
         <input type="hidden" name="teacher" id="moveTeacher" value="" />
+        <input type="hidden" name="lesson_type" id="moveLessonType" value="" />
         <input type="hidden" name="subgroup" id="moveSubgroup" value="0" />
         <input type="hidden" name="old_day" id="moveOldDay" value="" />
         <input type="hidden" name="old_slot" id="moveOldSlot" value="" />
@@ -382,6 +383,7 @@
     document.getElementById('moveGroup').value = btn.getAttribute('data-edit-group') || '';
     document.getElementById('moveDiscipline').value = btn.getAttribute('data-edit-discipline') || '';
     document.getElementById('moveTeacher').value = btn.getAttribute('data-edit-teacher') || '';
+    document.getElementById('moveLessonType').value = btn.getAttribute('data-edit-lesson-type') || '';
     document.getElementById('moveSubgroup').value = btn.getAttribute('data-edit-subgroup') || '0';
     document.getElementById('moveOldDay').value = btn.getAttribute('data-edit-day') || '';
     document.getElementById('moveOldSlot').value = btn.getAttribute('data-edit-slot') || '';

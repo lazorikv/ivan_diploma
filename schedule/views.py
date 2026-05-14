@@ -349,6 +349,7 @@ def _cell_equal(c1: dict | None, c2: dict | None) -> bool:
         c1.get("discipline_short") == c2.get("discipline_short")
         and c1.get("teacher") == c2.get("teacher")
         and c1.get("subgroup") == c2.get("subgroup")
+        and c1.get("lesson_type") == c2.get("lesson_type")
     )
 
 
@@ -777,6 +778,7 @@ def _resolve_move_indices(
     old_slot: int,
     discipline_short: str,
     teacher: str,
+    lesson_type: str,
     subgroup: int,
 ) -> list[int]:
     """
@@ -822,6 +824,16 @@ def _resolve_move_indices(
         if by_t:
             narrowed = by_t
 
+    nlt = _norm_compact(lesson_type)
+    if nlt and len(narrowed) > 1:
+        by_lt = [
+            i
+            for i in narrowed
+            if _norm_compact(str(entries[i].get("lesson_type") or "")) == nlt
+        ]
+        if by_lt:
+            narrowed = by_lt
+
     return narrowed
 
 
@@ -841,15 +853,22 @@ def schedule_move(request):
         return redirect("index")
 
     restrict_weeks, scope_ok = _resolve_restrict_weeks_for_move_post(request)
+    cell_is_merged = request.POST.get("cell_is_merged") == "1"
 
     dest_week_override = _normalize_dest_week_post(
         request.POST.get("target_week") or request.POST.get("dest_week")
     )
     dest_invalid = dest_week_override not in (None, 0, 1, 2)
 
+    # Если источник был merged (В/Н), а цель — конкретная неделя,
+    # переносим только эту неделю, вторая остаётся на исходном слоте.
+    if cell_is_merged and dest_week_override in (1, 2):
+        restrict_weeks = frozenset({int(dest_week_override)})
+
     group = (request.POST.get("group") or "").strip()
     discipline_short = (request.POST.get("discipline_short") or "").strip()
     teacher = (request.POST.get("teacher") or "").strip()
+    lesson_type = (request.POST.get("lesson_type") or "").strip()
 
     try:
         subgroup = int(request.POST.get("subgroup") or 0)
@@ -899,6 +918,7 @@ def schedule_move(request):
         old_slot=old_slot,
         discipline_short=discipline_short,
         teacher=teacher,
+        lesson_type=lesson_type,
         subgroup=subgroup,
     )
     if not indices and restrict_weeks is not None:
@@ -910,6 +930,7 @@ def schedule_move(request):
             old_slot=old_slot,
             discipline_short=discipline_short,
             teacher=teacher,
+            lesson_type=lesson_type,
             subgroup=subgroup,
         )
 

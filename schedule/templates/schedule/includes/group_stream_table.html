@@ -36,6 +36,7 @@
                  data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
                  data-edit-discipline="{{ entry.discipline_short }}"
                  data-edit-teacher="{{ entry.teacher }}"
+                 data-edit-lesson-type="{{ entry.lesson_type }}"
                  data-edit-other-week="">
               <div class="lesson-disc">{{ entry.discipline_short }}</div>
               <div class="lesson-meta">
@@ -68,6 +69,7 @@
                    data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
                    data-edit-discipline="{{ entry.discipline_short }}"
                    data-edit-teacher="{{ entry.teacher }}"
+                   data-edit-lesson-type="{{ entry.lesson_type }}"
                    data-edit-other-week="{% if cell.w2 %}1{% endif %}">
                 <span class="week-label-badge week-upper-badge">В</span>
                 <div class="lesson-disc">{{ entry.discipline_short }}</div>
@@ -100,6 +102,7 @@
                    data-edit-subgroup="{{ entry.subgroup|default:'0' }}"
                    data-edit-discipline="{{ entry.discipline_short }}"
                    data-edit-teacher="{{ entry.teacher }}"
+                   data-edit-lesson-type="{{ entry.lesson_type }}"
                    data-edit-other-week="{% if cell.w1 %}1{% endif %}">
                 <span class="week-label-badge week-lower-badge">Н</span>
                 <div class="lesson-disc">{{ entry.discipline_short }}</div>
